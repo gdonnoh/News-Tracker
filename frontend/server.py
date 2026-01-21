@@ -35,35 +35,49 @@ else:
 try:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    # Assicurati che la directory del database esista
+    DEDUPE_DB.parent.mkdir(parents=True, exist_ok=True)
 except Exception as e:
     print(f"Warning: Errore creazione directory: {e}")
 
-# Inizializza tabella per articoli eliminati
-def init_deleted_articles_table():
-    """Inizializza tabella per articoli eliminati nel database."""
-    import sqlite3
-    conn = sqlite3.connect(str(DEDUPE_DB))
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS deleted_articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE NOT NULL,
-            original_data TEXT NOT NULL,
-            rewritten_data TEXT,
-            quality_gate_data TEXT,
-            source_name TEXT,
-            deleted_at TEXT NOT NULL,
-            deleted_reason TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_deleted_url ON deleted_articles(url)
-    """)
-    conn.commit()
-    conn.close()
+# Inizializza tabella per articoli eliminati (lazy initialization)
+_db_initialized = False
 
-# Inizializza al caricamento del modulo
-init_deleted_articles_table()
+def init_deleted_articles_table():
+    """Inizializza tabella per articoli eliminati nel database (lazy)."""
+    global _db_initialized
+    if _db_initialized:
+        return
+    
+    try:
+        import sqlite3
+        # Assicurati che la directory esista
+        DEDUPE_DB.parent.mkdir(parents=True, exist_ok=True)
+        # Crea database vuoto se non esiste
+        conn = sqlite3.connect(str(DEDUPE_DB))
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS deleted_articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT UNIQUE NOT NULL,
+                original_data TEXT NOT NULL,
+                rewritten_data TEXT,
+                quality_gate_data TEXT,
+                source_name TEXT,
+                deleted_at TEXT NOT NULL,
+                deleted_reason TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deleted_url ON deleted_articles(url)
+        """)
+        conn.commit()
+        conn.close()
+        _db_initialized = True
+    except Exception as e:
+        # Log errore ma non bloccare startup
+        print(f"Warning: Errore inizializzazione database: {e}")
+        # Non bloccare l'applicazione, il database verrà inizializzato quando necessario
 
 
 @app.route('/')
@@ -402,6 +416,9 @@ def delete_article():
     import json
     import time
     
+    # Inizializza database se necessario
+    init_deleted_articles_table()
+    
     try:
         data = request.get_json()
         article_url = data.get('url')
@@ -478,6 +495,9 @@ def get_deleted_articles():
     """Restituisce lista articoli eliminati dal database."""
     import sqlite3
     import json
+    
+    # Inizializza database se necessario
+    init_deleted_articles_table()
     
     try:
         conn = sqlite3.connect(str(DEDUPE_DB))
