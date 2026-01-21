@@ -45,7 +45,7 @@ try:
 except Exception as e:
     print(f"Warning: Errore creazione directory: {e}")
 
-# Inizializza tabella per articoli eliminati (lazy initialization)
+# Inizializza tabella per articoli eliminati (lazy initialization - NO chiamata durante import!)
 _db_initialized = False
 
 def init_deleted_articles_table():
