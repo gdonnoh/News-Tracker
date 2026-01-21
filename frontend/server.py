@@ -19,7 +19,12 @@ BASE_DIR = Path(__file__).parent.parent
 
 # Su Vercel, usa /tmp per file scrivibili (unico path scrivibile)
 # In locale, usa la directory data normale
-IS_VERCEL = os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV")
+# Vercel imposta VERCEL=1 come variabile ambiente
+IS_VERCEL = (
+    os.getenv("VERCEL") == "1" or 
+    os.getenv("VERCEL_ENV") is not None or
+    "/var/task" in str(Path(__file__).absolute())  # Fallback: controlla path Vercel
+)
 if IS_VERCEL:
     # Vercel environment - usa /tmp (unico path scrivibile)
     CACHE_DIR = Path("/tmp") / "cache"
