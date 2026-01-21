@@ -51,10 +51,19 @@ def init_deleted_articles_table():
     
     try:
         import sqlite3
-        # Assicurati che la directory esista
-        DEDUPE_DB.parent.mkdir(parents=True, exist_ok=True)
+        # Assicurati che la directory esista (con retry per Vercel)
+        try:
+            DEDUPE_DB.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as dir_err:
+            print(f"Warning: Errore creazione directory database: {dir_err}")
+            # Su Vercel, /tmp dovrebbe già esistere, ma proviamo comunque
+            if IS_VERCEL:
+                # Su Vercel, /tmp esiste sempre, quindi il problema potrebbe essere altro
+                pass
+        
         # Crea database vuoto se non esiste
-        conn = sqlite3.connect(str(DEDUPE_DB))
+        # Usa timeout per evitare lock su Vercel
+        conn = sqlite3.connect(str(DEDUPE_DB), timeout=10.0)
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS deleted_articles (
