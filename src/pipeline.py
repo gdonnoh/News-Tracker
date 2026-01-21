@@ -119,8 +119,13 @@ class NewsPipeline:
             from pathlib import Path
             
             # Usa path assoluto per evitare problemi con working directory
-            base_dir = Path(__file__).parent.parent
-            cache_dir = base_dir / "data" / "cache"
+            # Su Vercel, usa /tmp (unico path scrivibile)
+            import os
+            if os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV"):
+                cache_dir = Path("/tmp") / "cache"
+            else:
+                base_dir = Path(__file__).parent.parent
+                cache_dir = base_dir / "data" / "cache"
             cache_dir.mkdir(parents=True, exist_ok=True)
             
             # Usa stesso nome file dell'estratto ma con prefisso rewritten_
@@ -400,8 +405,13 @@ class NewsPipeline:
         """Callback per aggiornare stato durante fetch."""
         try:
             # Usa path assoluto per evitare problemi con working directory
-            base_dir = Path(__file__).parent.parent
-            status_file = base_dir / "data" / "pipeline_status.json"
+            # Su Vercel, usa /tmp (unico path scrivibile)
+            import os
+            if os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV"):
+                status_file = Path("/tmp") / "pipeline_status.json"
+            else:
+                base_dir = Path(__file__).parent.parent
+                status_file = base_dir / "data" / "pipeline_status.json"
             if status_file.exists():
                 with open(status_file, "r", encoding="utf-8") as f:
                     stats = json.load(f)
@@ -431,8 +441,13 @@ class NewsPipeline:
             from pathlib import Path
             
             # Usa path assoluto per evitare problemi con working directory
-            base_dir = Path(__file__).parent.parent
-            status_file = base_dir / "data" / "pipeline_status.json"
+            # Su Vercel, usa /tmp (unico path scrivibile)
+            import os
+            if os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV"):
+                status_file = Path("/tmp") / "pipeline_status.json"
+            else:
+                base_dir = Path(__file__).parent.parent
+                status_file = base_dir / "data" / "pipeline_status.json"
             status_file.parent.mkdir(parents=True, exist_ok=True)
             
             with open(status_file, "w", encoding="utf-8") as f:

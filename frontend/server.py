@@ -14,10 +14,29 @@ from flask_cors import CORS
 app = Flask(__name__, static_folder='.')
 CORS(app)
 
+# Path handling per Vercel (serverless) e locale
 BASE_DIR = Path(__file__).parent.parent
-CACHE_DIR = BASE_DIR / "data" / "cache"
-LOGS_DIR = BASE_DIR / "data" / "logs"
-DEDUPE_DB = BASE_DIR / "data" / "dedupe.db"
+
+# Su Vercel, usa /tmp per file scrivibili (unico path scrivibile)
+# In locale, usa la directory data normale
+IS_VERCEL = os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV")
+if IS_VERCEL:
+    # Vercel environment - usa /tmp (unico path scrivibile)
+    CACHE_DIR = Path("/tmp") / "cache"
+    LOGS_DIR = Path("/tmp") / "logs"
+    DEDUPE_DB = Path("/tmp") / "dedupe.db"
+else:
+    # Local environment
+    CACHE_DIR = BASE_DIR / "data" / "cache"
+    LOGS_DIR = BASE_DIR / "data" / "logs"
+    DEDUPE_DB = BASE_DIR / "data" / "dedupe.db"
+
+# Crea directory se non esistono
+try:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    print(f"Warning: Errore creazione directory: {e}")
 
 # Inizializza tabella per articoli eliminati
 def init_deleted_articles_table():
@@ -214,50 +233,45 @@ def article_page():
 def extract_articles():
     """Esegue pipeline per estrarre nuovi articoli."""
     from flask import request
-    import subprocess
-    import threading
     
     try:
         data = request.get_json() or {}
         limit = data.get('limit', 10)
         
-        # Esegui pipeline in background
-        def run_pipeline():
-            try:
-                import sys
-                from pathlib import Path
-                sys.path.insert(0, str(Path(__file__).parent.parent))
-                
-                from src.pipeline import NewsPipeline
-                
-                pipeline = NewsPipeline(config_dir=str(Path(__file__).parent.parent / "config"), dry_run=True)
-                pipeline.run(limit=limit)
-            except Exception as e:
-                print(f"Errore pipeline: {e}")
+        # Su Vercel, esegui direttamente (no threading per serverless)
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(BASE_DIR))
         
-        # Avvia in thread separato per non bloccare
-        thread = threading.Thread(target=run_pipeline)
-        thread.daemon = True
-        thread.start()
+        from src.pipeline import NewsPipeline
+        
+        # Configurazione per Vercel
+        config_dir = str(BASE_DIR / "config")
+        pipeline = NewsPipeline(config_dir=config_dir, dry_run=True)
+        
+        # Esegui pipeline (sincrono su Vercel)
+        pipeline.run(limit=limit)
         
         return jsonify({
             "success": True,
-            "message": f"Pipeline avviata per estrarre fino a {limit} articoli",
-            "status": "running"
+            "message": f"Pipeline completata: {limit} articoli processati",
+            "status": "completed"
         })
         
     except Exception as e:
         import traceback
+        error_trace = traceback.format_exc()
+        print(f"Errore pipeline: {e}\n{error_trace}")
         return jsonify({
             "error": str(e),
-            "traceback": traceback.format_exc()
+            "traceback": error_trace
         }), 500
 
 
 @app.route('/api/pipeline-status')
 def get_pipeline_status():
     """Restituisce stato corrente della pipeline."""
-    status_file = BASE_DIR / "data" / "pipeline_status.json"
+    status_file = LOGS_DIR / "pipeline_status.json" if IS_VERCEL else BASE_DIR / "data" / "pipeline_status.json"
     
     if status_file.exists():
         try:
@@ -627,12 +641,19 @@ def test_email():
         }), 500
 
 
+# Handler per Vercel serverless
+def handler(request):
+    """Handler per Vercel serverless functions."""
+    return app(request.environ, lambda status, headers: None)
+
+# Export per Vercel
 if __name__ == '__main__':
     import sys
     
     print("🚀 Avvio server frontend mock...")
     print(f"📁 Cache dir: {CACHE_DIR}")
     print(f"📁 Logs dir: {LOGS_DIR}")
+    print(f"📁 Database: {DEDUPE_DB}")
     
     # Prova porta 5000, se occupata usa 5001
     port = 5000
@@ -657,4 +678,6 @@ if __name__ == '__main__':
         sys.exit(1)
     except Exception as e:
         print(f"\n❌ Errore: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
