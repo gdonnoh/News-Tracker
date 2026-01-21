@@ -1,5 +1,5 @@
-# Requirements ottimizzati per Vercel
-# Le dipendenze ML pesanti sono opzionali e caricate solo quando necessarie
+# Requirements ottimizzati per Vercel (senza dipendenze pesanti)
+# Le dipendenze ML sono caricate solo quando necessarie
 
 # Core dependencies
 requests>=2.31.0
@@ -26,6 +26,6 @@ html5lib>=1.1
 flask>=3.0.0
 flask-cors>=4.0.0
 
-# NOTE: sentence-transformers e numpy sono opzionali
-# Il codice gestisce l'assenza di queste dipendenze con fallback
-# Per installazione locale completa, usa: pip install sentence-transformers numpy
+# NOTE: sentence-transformers e numpy sono esclusi per Vercel
+# Verranno installati solo se necessario durante runtime
+# Il codice gestisce l'assenza di queste dipendenze

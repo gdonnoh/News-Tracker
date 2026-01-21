@@ -5,8 +5,17 @@ Controlla similarità, coerenza, policy e rischio.
 
 import re
 from typing import Dict, List, Tuple
-from sentence_transformers import SentenceTransformer
-import numpy as np
+
+try:
+    import numpy as np
+    from sentence_transformers import SentenceTransformer
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+    # Fallback per ambienti senza ML dependencies
+    np = None
+    SentenceTransformer = None
+
 from src.logger import get_logger
 
 logger = get_logger()
@@ -43,6 +52,10 @@ class QualityGates:
     
     def _get_model(self):
         """Lazy loading modello embeddings."""
+        if not HAS_ML_DEPS:
+            logger.log_warning("ML dependencies non disponibili, quality gates useranno fallback")
+            return None
+        
         if self._model is None:
             try:
                 logger.log_info(f"Caricamento modello per quality gates: {self.model_name}")
@@ -69,6 +82,19 @@ class QualityGates:
         """
         try:
             model = self._get_model()
+            
+            if not model:
+                # Fallback: similarità basata su parole comuni
+                logger.log_info("Usando fallback per calcolo similarità (ML deps non disponibili)")
+                words1 = set(original_text.lower().split())
+                words2 = set(rewritten_text.lower().split())
+                if not words1 or not words2:
+                    return False, 0.0
+                intersection = len(words1.intersection(words2))
+                union = len(words1.union(words2))
+                similarity = intersection / union if union > 0 else 0.0
+                is_too_similar = similarity >= self.similarity_threshold
+                return is_too_similar, similarity
             
             # Limita lunghezza per performance
             orig_limited = original_text[:2000]

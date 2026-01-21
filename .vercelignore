@@ -1,0 +1,18 @@
+# Ignora file pesanti durante deploy Vercel
+data/
+*.db
+*.sqlite
+*.sqlite3
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.log
+logs/

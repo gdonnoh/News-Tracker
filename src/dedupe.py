@@ -7,8 +7,16 @@ import hashlib
 import sqlite3
 from pathlib import Path
 from typing import Dict, Optional, Tuple
-import numpy as np
-from sentence_transformers import SentenceTransformer
+try:
+    import numpy as np
+    from sentence_transformers import SentenceTransformer
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+    # Fallback per ambienti senza ML dependencies
+    np = None
+    SentenceTransformer = None
+
 from src.logger import get_logger
 
 logger = get_logger()
@@ -36,6 +44,10 @@ class Deduplicator:
     
     def _get_model(self):
         """Lazy loading del modello di embeddings."""
+        if not HAS_ML_DEPS:
+            logger.log_warning("ML dependencies non disponibili, deduplicazione basata solo su hash")
+            return None
+        
         if self._model is None:
             logger.log_info(f"Caricamento modello embeddings: {self.model_name}")
             self._model = SentenceTransformer(self.model_name)
@@ -92,9 +104,12 @@ class Deduplicator:
         """Calcola hash SHA256 di un testo."""
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
     
-    def _compute_embedding(self, text: str) -> np.ndarray:
+    def _compute_embedding(self, text: str):
         """Calcola embedding semantico del testo."""
         model = self._get_model()
+        if not model:
+            return None  # ML dependencies non disponibili
+        
         # Limita lunghezza per performance
         text = text[:1000] if len(text) > 1000 else text
         embedding = model.encode(text, normalize_embeddings=True)
@@ -179,28 +194,34 @@ class Deduplicator:
             try:
                 current_title_emb = self._compute_embedding(normalized_title)
                 
-                # Carica embeddings esistenti o calcola al volo
-                best_similarity = 0.0
-                best_match = None
-                
-                for match_hash_id, match_wp_id, match_title in title_matches:
-                    # Calcola embedding del match (o carica da DB se salvato)
-                    match_title_emb = self._compute_embedding(match_title)
-                    similarity = self._cosine_similarity(current_title_emb, match_title_emb)
+                if current_title_emb is None:
+                    # ML dependencies non disponibili, salta controllo semantico
+                    pass
+                else:
+                    # Carica embeddings esistenti o calcola al volo
+                    best_similarity = 0.0
+                    best_match = None
                     
-                    if similarity > best_similarity:
-                        best_similarity = similarity
-                        best_match = (match_hash_id, match_wp_id)
-                
-                if best_similarity >= self.similarity_threshold:
-                    conn.close()
-                    return {
-                        "is_duplicate": True,
-                        "reason": "semantic_similarity_title",
-                        "similar_to": best_match[0],
-                        "wp_post_id": best_match[1],
-                        "similarity_score": best_similarity
-                    }
+                    for match_hash_id, match_wp_id, match_title in title_matches:
+                        # Calcola embedding del match (o carica da DB se salvato)
+                        match_title_emb = self._compute_embedding(match_title)
+                        if match_title_emb is None:
+                            continue
+                        similarity = self._cosine_similarity(current_title_emb, match_title_emb)
+                        
+                        if similarity > best_similarity:
+                            best_similarity = similarity
+                            best_match = (match_hash_id, match_wp_id)
+                    
+                    if best_similarity >= self.similarity_threshold:
+                        conn.close()
+                        return {
+                            "is_duplicate": True,
+                            "reason": "semantic_similarity_title",
+                            "similar_to": best_match[0],
+                            "wp_post_id": best_match[1],
+                            "similarity_score": best_similarity
+                        }
             except Exception as e:
                 logger.log_warning(f"Errore nel calcolo similarità: {e}")
         
