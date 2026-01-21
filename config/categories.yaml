@@ -1,0 +1,24 @@
+# Mapping categorie per WordPress
+
+# Mappa tag/categorie dalla riscrittura LLM a categorie WordPress
+category_mapping:
+  "tecnologia": "tech"
+  "scienza": "science"
+  "politica": "politics"
+  "economia": "economy"
+  "sport": "sports"
+  "cultura": "culture"
+  "salute": "health"
+  "cronaca": "news"
+  "default": "news"  # categoria di default se non mappata
+
+# Categorie WordPress esistenti (verranno create se non esistono)
+wordpress_categories:
+  - "tech"
+  - "science"
+  - "politics"
+  - "economy"
+  - "sports"
+  - "culture"
+  - "health"
+  - "news"

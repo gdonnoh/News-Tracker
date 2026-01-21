@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Pipeline - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-card .value.success {
+            color: #10b981;
+        }
+
+        .stat-card .value.warning {
+            color: #f59e0b;
+        }
+
+        .stat-card .value.error {
+            color: #ef4444;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .articles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .article-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: #e5e7eb;
+        }
+
+        .article-content {
+            padding: 1.5rem;
+        }
+
+        .article-source {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .article-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+            line-height: 1.4;
+        }
+
+        .article-excerpt {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .article-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #9ca3af;
+        }
+
+        .article-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-extracted {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-skipped {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-created {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .log-viewer {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            border-left: 3px solid transparent;
+        }
+
+        .log-entry.info {
+            border-left-color: #3b82f6;
+        }
+
+        .log-entry.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .log-entry.error {
+            border-left-color: #ef4444;
+        }
+
+        .log-time {
+            color: #9ca3af;
+            margin-right: 0.5rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #9ca3af;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+            transition: background 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📰 News Pipeline Dashboard</h1>
+        <p>Monitoraggio articoli estratti e processati</p>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <h3>Totale Articoli</h3>
+                <div class="value" id="totalArticles">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Estratti</h3>
+                <div class="value success" id="extractedCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Creati</h3>
+                <div class="value success" id="createdCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Saltati</h3>
+                <div class="value warning" id="skippedCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Falliti</h3>
+                <div class="value error" id="failedCount">0</div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <button class="refresh-btn" onclick="loadData()">🔄 Aggiorna Dati</button>
+            <button class="refresh-btn" onclick="extractArticles()" id="extractBtn" style="background: #10b981;">
+                📰 Estrai Nuovi Articoli
+            </button>
+            <button class="refresh-btn" onclick="toggleMonitor()" id="monitorBtn" style="background: #f59e0b;">
+                🔄 Monitoraggio Continuo
+            </button>
+        </div>
+        <div id="monitorStatus" style="display: none; margin-bottom: 1.5rem;"></div>
+        <div id="extractStatus" style="display: none; margin-bottom: 1.5rem;"></div>
+        <div id="pipelineStatus" style="display: none; margin-bottom: 1.5rem;"></div>
+        
+        <!-- Barra di caricamento con log in tempo reale -->
+        <div id="progressBar" style="display: none; margin-bottom: 1.5rem;">
+            <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; color: #1f2937;">📊 Progresso Estrazione</h3>
+                    <div id="progressPercent" style="font-weight: 600; color: #667eea;">0%</div>
+                </div>
+                
+                <!-- Barra di progresso -->
+                <div style="background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
+                    <div id="progressBarFill" style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                </div>
+                
+                <!-- Step corrente -->
+                <div id="currentStep" style="margin-bottom: 1rem; padding: 0.75rem; background: #f3f4f6; border-radius: 6px;">
+                    <strong style="color: #667eea;">In attesa...</strong>
+                </div>
+                
+                <!-- Log in tempo reale -->
+                <div style="max-height: 300px; overflow-y: auto; background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 6px; font-family: 'Monaco', 'Courier New', monospace; font-size: 0.85rem;">
+                    <div id="progressLog" style="line-height: 1.6;">
+                        <div style="color: #9ca3af;">In attesa di avvio...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('articles')">Articoli</button>
+            <button class="tab" onclick="switchTab('logs')">Log</button>
+            <button class="tab" onclick="switchTab('stats')">Statistiche</button>
+        </div>
+
+        <div id="articlesTab" class="tab-content active">
+            <div class="articles-grid" id="articlesGrid">
+                <div class="loading">Caricamento articoli...</div>
+            </div>
+        </div>
+
+        <div id="logsTab" class="tab-content">
+            <div class="log-viewer" id="logViewer">
+                <div class="loading">Caricamento log...</div>
+            </div>
+        </div>
+
+        <div id="statsTab" class="tab-content">
+            <div id="statsContent">
+                <div class="loading">Caricamento statistiche...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Funzione per caricare i dati
+        async function loadData() {
+            try {
+                // Carica articoli estratti
+                await loadArticles();
+                
+                // Carica log
+                await loadLogs();
+                
+                // Carica statistiche
+                await loadStats();
+            } catch (error) {
+                console.error('Errore caricamento dati:', error);
+            }
+        }
+
+        // Carica articoli dalla cache
+        async function loadArticles() {
+            const response = await fetch('/api/articles');
+            const articles = await response.json();
+            
+            const grid = document.getElementById('articlesGrid');
+            
+            if (articles.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p>Nessun articolo estratto ancora</p>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Esegui la pipeline per vedere gli articoli qui</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            grid.innerHTML = articles.map(article => {
+                const hasRewritten = article.has_rewritten || false;
+                const rewritten = article.rewritten || {};
+                const qualityGate = article.quality_gate || {};
+                const qualityPassed = qualityGate.passed !== false; // Default true se non presente
+                const displayTitle = hasRewritten && rewritten.headline ? rewritten.headline : article.title;
+                const displayText = hasRewritten && rewritten.lead ? rewritten.lead : (article.text ? article.text.substring(0, 150) + '...' : 'Nessun contenuto');
+                const statusClass = hasRewritten ? (qualityPassed ? 'status-created' : 'status-skipped') : 'status-extracted';
+                const statusText = hasRewritten ? (qualityPassed ? 'Riscritto' : 'Riscritto (scartato)') : 'Estratto';
+                
+                return `
+                <div class="article-card">
+                    ${article.images && article.images.length > 0 ? 
+                        `<img src="${article.images[0]}" alt="${displayTitle}" class="article-image" onerror="this.style.display='none'">` : 
+                        '<div class="article-image"></div>'
+                    }
+                    <div class="article-content">
+                        <span class="article-source">${article.source_name || 'Sconosciuto'}</span>
+                        ${hasRewritten ? 
+                            (qualityPassed ? 
+                                '<span style="background: #10b981; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">✨ AI</span>' : 
+                                '<span style="background: #f59e0b; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">⚠️ Scartato</span>'
+                            ) : ''}
+                        ${hasRewritten ? 
+                            (qualityGate.similarity_score !== undefined && qualityGate.similarity_score !== null ? 
+                                `<div style="margin-top: 0.75rem; padding: 0.75rem; background: ${qualityPassed ? '#d1fae5' : '#fef3c7'}; border-left: 3px solid ${qualityPassed ? '#10b981' : '#f59e0b'}; border-radius: 4px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                        <strong style="color: ${qualityPassed ? '#065f46' : '#92400e'}; font-size: 0.85rem;">Similarità con originale:</strong>
+                                        <span style="font-weight: 700; font-size: 1rem; color: ${qualityPassed ? '#059669' : '#d97706'};">
+                                            ${(qualityGate.similarity_score * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                    <div style="background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 0.5rem;">
+                                        <div style="background: ${qualityGate.similarity_score < 0.7 ? '#10b981' : qualityGate.similarity_score < 0.85 ? '#f59e0b' : '#ef4444'}; height: 100%; width: ${qualityGate.similarity_score * 100}%; transition: width 0.3s;"></div>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #6b7280;">
+                                        <span>0% (completamente originale)</span>
+                                        <span>100% (identico)</span>
+                                    </div>
+                                    ${!qualityPassed && qualityGate.issues && qualityGate.issues.length > 0 ? 
+                                        `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid ${qualityPassed ? '#a7f3d0' : '#fde68a'}; font-size: 0.8rem; color: ${qualityPassed ? '#065f46' : '#92400e'};">
+                                            <strong>Motivo scarto:</strong> ${qualityGate.issues[0]}
+                                        </div>` : ''
+                                    }
+                                </div>` : 
+                                `<div style="margin-top: 0.5rem; padding: 0.5rem; background: #e5e7eb; border-left: 3px solid #9ca3af; border-radius: 4px; font-size: 0.8rem; color: #6b7280;">
+                                    <em>Similarità non ancora calcolata. Riscrivi l'articolo per vedere il valore.</em>
+                                </div>`
+                            ) : ''
+                        }
+                        <h3 class="article-title">${displayTitle || 'Nessun titolo'}</h3>
+                        <p class="article-excerpt">${displayText}</p>
+                        ${hasRewritten && rewritten.body_markdown ? 
+                            `<details style="margin-top: 0.5rem;">
+                                <summary style="cursor: pointer; color: #667eea; font-size: 0.85rem;">Leggi articolo completo riscritto</summary>
+                                <div style="margin-top: 0.5rem; padding: 0.75rem; background: #f5f5f5; border-radius: 4px; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap;">${rewritten.body_markdown.substring(0, 500)}${rewritten.body_markdown.length > 500 ? '...' : ''}</div>
+                            </details>` : ''
+                        }
+                        <div class="article-meta">
+                            <span>${article.published_at ? new Date(article.published_at).toLocaleDateString('it-IT') : 'Data sconosciuta'}</span>
+                            <span class="article-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div style="margin-top: 0.75rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                            ${hasRewritten ? 
+                                `<a href="/article.html?url=${encodeURIComponent(article.url)}" style="background: #10b981; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.9rem; font-weight: 600;">📖 Leggi Articolo Riscritto</a>` : 
+                                `<button onclick="rewriteArticle('${article.url}', this)" style="background: #667eea; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;">✨ Riscrivi con AI</button>`
+                            }
+                            <a href="${article.url}" target="_blank" style="color: #667eea; text-decoration: none; font-size: 0.85rem; padding: 0.5rem 0;">→ Vedi originale</a>
+                            <button onclick="deleteArticle('${article.url}', this)" style="background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;">🗑️ Elimina</button>
+                        </div>
+                        <div id="rewrite-status-${btoa(article.url).replace(/[^a-zA-Z0-9]/g, '')}" style="margin-top: 0.5rem; display: none;"></div>
+                    </div>
+                </div>
+            `;
+            }).join('');
+            
+            // Aggiorna statistiche
+            updateStats(articles);
+        }
+
+        // Carica log
+        async function loadLogs() {
+            const response = await fetch('/api/logs');
+            const logs = await response.json();
+            
+            const viewer = document.getElementById('logViewer');
+            
+            if (logs.length === 0) {
+                viewer.innerHTML = '<div class="empty-state">Nessun log disponibile</div>';
+                return;
+            }
+            
+            viewer.innerHTML = logs.map(log => {
+                const level = log.level || 'info';
+                const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString('it-IT') : '';
+                return `
+                    <div class="log-entry ${level}">
+                        <span class="log-time">${time}</span>
+                        <span>${log.message || JSON.stringify(log)}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            // Scroll to bottom
+            viewer.scrollTop = viewer.scrollHeight;
+        }
+
+        // Carica statistiche
+        async function loadStats() {
+            const response = await fetch('/api/stats');
+            const stats = await response.json();
+            
+            const content = document.getElementById('statsContent');
+            content.innerHTML = `
+                <div style="background: white; padding: 2rem; border-radius: 8px;">
+                    <h2 style="margin-bottom: 1.5rem;">Statistiche Pipeline</h2>
+                    <pre style="background: #f5f5f5; padding: 1.5rem; border-radius: 6px; overflow-x: auto;">${JSON.stringify(stats, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        // Aggiorna statistiche cards
+        function updateStats(articles) {
+            document.getElementById('totalArticles').textContent = articles.length;
+            document.getElementById('extractedCount').textContent = articles.length;
+            
+            // Conta per status (se disponibile nei log)
+            // Questo verrà aggiornato quando carichiamo i log completi
+        }
+
+        // Switch tab
+        function switchTab(tabName) {
+            // Rimuovi active da tutti i tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            // Aggiungi active al tab selezionato
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        // Funzione per estrarre nuovi articoli
+        async function extractArticles() {
+            const btn = document.getElementById('extractBtn');
+            const statusDiv = document.getElementById('extractStatus');
+            const originalText = btn.textContent;
+            
+            // Chiedi quanti articoli estrarre
+            const limit = prompt('Quanti articoli vuoi estrarre?', '10');
+            if (!limit || isNaN(limit) || parseInt(limit) <= 0) {
+                return;
+            }
+            
+            // Disabilita pulsante e mostra loading
+            btn.disabled = true;
+            btn.textContent = '⏳ Estrazione in corso...';
+            btn.style.background = '#9ca3af';
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = `
+                <div style="background: #dbeafe; color: #1e40af; padding: 1rem; border-radius: 6px;">
+                    <strong>⏳ Estrazione in corso...</strong>
+                    <p style="margin-top: 0.5rem; margin-bottom: 0;">Sto estraendo fino a ${limit} articoli dai feed RSS. Questo potrebbe richiedere alcuni minuti...</p>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">Puoi chiudere questa finestra, l'estrazione continuerà in background.</div>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch('/api/extract-articles', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ limit: parseInt(limit) })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Errore nell\'estrazione');
+                }
+                
+                // Successo - pipeline avviata, inizia polling
+                statusDiv.innerHTML = `
+                    <div style="background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 6px;">
+                        <strong>✅ Estrazione avviata!</strong>
+                        <p style="margin-top: 0.5rem; margin-bottom: 0;">La pipeline sta processando fino a ${limit} articoli.</p>
+                    </div>
+                `;
+                
+                // Inizia polling dello stato
+                startStatusPolling();
+                
+            } catch (error) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+                btn.style.background = '#10b981';
+                statusDiv.innerHTML = `
+                    <div style="background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 6px;">
+                        <strong>❌ Errore:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Funzione per avviare/fermare monitoraggio continuo
+        let monitorStatusInterval = null;
+        
+        async function toggleMonitor() {
+            const btn = document.getElementById('monitorBtn');
+            const statusDiv = document.getElementById('monitorStatus');
+            
+            try {
+                // Controlla stato attuale
+                const statusResponse = await fetch('/api/monitor/status');
+                const status = await statusResponse.json();
+                
+                if (status.running) {
+                    // Ferma monitor
+                    const response = await fetch('/api/monitor/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        btn.textContent = '🔄 Monitoraggio Continuo';
+                        btn.style.background = '#f59e0b';
+                        statusDiv.style.display = 'none';
+                        
+                        if (monitorStatusInterval) {
+                            clearInterval(monitorStatusInterval);
+                            monitorStatusInterval = null;
+                        }
+                    } else {
+                        alert(`Errore: ${data.error || 'Errore sconosciuto'}`);
+                    }
+                } else {
+                    // Avvia monitor
+                    const pollInterval = prompt('Intervallo tra controlli (in secondi):', '300');
+                    if (!pollInterval) return;
+                    
+                    const response = await fetch('/api/monitor/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ poll_interval: parseInt(pollInterval) })
+                    });
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        btn.textContent = '⏸️ Ferma Monitoraggio';
+                        btn.style.background = '#ef4444';
+                        statusDiv.style.display = 'block';
+                        
+                        // Aggiorna stato ogni 5 secondi
+                        updateMonitorStatus();
+                        if (monitorStatusInterval) {
+                            clearInterval(monitorStatusInterval);
+                        }
+                        monitorStatusInterval = setInterval(updateMonitorStatus, 5000);
+                    } else {
+                        alert(`Errore: ${data.error || 'Errore sconosciuto'}`);
+                    }
+                }
+            } catch (error) {
+                alert(`Errore: ${error.message}`);
+            }
+        }
+        
+        async function updateMonitorStatus() {
+            const statusDiv = document.getElementById('monitorStatus');
+            
+            try {
+                const response = await fetch('/api/monitor/status');
+                const status = await response.json();
+                
+                if (status.running) {
+                    const lastCheck = status.last_check ? new Date(status.last_check).toLocaleTimeString('it-IT') : 'Mai';
+                    const pollInterval = status.poll_interval || 300;
+                    const nextCheck = status.last_check ? 
+                        new Date(new Date(status.last_check).getTime() + pollInterval * 1000).toLocaleTimeString('it-IT') : 
+                        'Prossimamente';
+                    
+                    statusDiv.innerHTML = `
+                        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3 style="margin: 0; color: #1f2937;">🔄 Monitoraggio Continuo Attivo</h3>
+                                <span style="background: #10b981; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">ATTIVO</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                                <div>
+                                    <div style="color: #6b7280; font-size: 0.85rem;">Ultimo controllo</div>
+                                    <div style="font-weight: 600; color: #1f2937;">${lastCheck}</div>
+                                </div>
+                                <div>
+                                    <div style="color: #6b7280; font-size: 0.85rem;">Prossimo controllo</div>
+                                    <div style="font-weight: 600; color: #1f2937;">${nextCheck}</div>
+                                </div>
+                                <div>
+                                    <div style="color: #6b7280; font-size: 0.85rem;">Controlli totali</div>
+                                    <div style="font-weight: 600; color: #1f2937;">${status.total_checks || 0}</div>
+                                </div>
+                                <div>
+                                    <div style="color: #6b7280; font-size: 0.85rem;">Articoli processati</div>
+                                    <div style="font-weight: 600; color: #1f2937;">${status.total_articles_processed || 0}</div>
+                                </div>
+                            </div>
+                            ${status.last_articles && status.last_articles.length > 0 ? `
+                                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+                                    <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 0.5rem;">Ultimi articoli processati:</div>
+                                    <div style="max-height: 150px; overflow-y: auto;">
+                                        ${status.last_articles.slice(0, 5).map(article => `
+                                            <div style="padding: 0.5rem; background: #f3f4f6; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                                <div style="font-weight: 600; color: #1f2937;">${article.title || 'Nessun titolo'}</div>
+                                                <div style="color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;">
+                                                    ${article.source || 'Unknown'} • ${new Date(article.processed_at).toLocaleString('it-IT')}
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    statusDiv.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Errore aggiornamento stato monitor:', error);
+            }
+        }
+        
+        // Controlla stato monitor al caricamento
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/api/monitor/status');
+                const status = await response.json();
+                
+                if (status.running) {
+                    const btn = document.getElementById('monitorBtn');
+                    btn.textContent = '⏸️ Ferma Monitoraggio';
+                    btn.style.background = '#ef4444';
+                    document.getElementById('monitorStatus').style.display = 'block';
+                    updateMonitorStatus();
+                    monitorStatusInterval = setInterval(updateMonitorStatus, 5000);
+                }
+            } catch (error) {
+                console.error('Errore controllo stato monitor:', error);
+            }
+        });
+
+        // Funzione per eliminare un articolo
+        async function deleteArticle(url, button) {
+            if (!confirm('Sei sicuro di voler eliminare questo articolo? L\'articolo verrà salvato nel database.')) {
+                return;
+            }
+            
+            const originalText = button.textContent;
+            const articleCard = button.closest('.article-card');
+            
+            button.disabled = true;
+            button.textContent = '⏳ Eliminazione...';
+            button.style.background = '#9ca3af';
+            
+            try {
+                const response = await fetch('/api/delete-article', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Errore nell\'eliminazione');
+                }
+                
+                // Successo - anima rimozione
+                articleCard.style.opacity = '0.5';
+                articleCard.style.transition = 'opacity 0.3s';
+                
+                setTimeout(() => {
+                    loadArticles(); // Ricarica lista
+                }, 300);
+                
+            } catch (error) {
+                button.disabled = false;
+                button.textContent = originalText;
+                button.style.background = '#ef4444';
+                alert(`Errore: ${error.message}`);
+            }
+        }
+
+        // Polling dello stato pipeline
+        let statusPollingInterval = null;
+        
+        function startStatusPolling() {
+            // Ferma polling esistente se presente
+            if (statusPollingInterval) {
+                clearInterval(statusPollingInterval);
+            }
+            
+            // Poll ogni 2 secondi
+            statusPollingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/pipeline-status');
+                    const status = await response.json();
+                    
+                    updatePipelineStatus(status);
+                    
+                    // Se completata, ferma polling dopo 5 secondi
+                    if (status.status === 'completed') {
+                        setTimeout(() => {
+                            if (statusPollingInterval) {
+                                clearInterval(statusPollingInterval);
+                                statusPollingInterval = null;
+                            }
+                            // Ricarica articoli
+                            loadArticles();
+                        }, 5000);
+                    }
+                } catch (error) {
+                    console.error('Errore polling status:', error);
+                }
+            }, 2000);
+        }
+        
+        function updatePipelineStatus(status) {
+            const pipelineStatusDiv = document.getElementById('pipelineStatus');
+            const progressBarDiv = document.getElementById('progressBar');
+            
+            if (status.status === 'idle') {
+                pipelineStatusDiv.style.display = 'none';
+                progressBarDiv.style.display = 'none';
+                return;
+            }
+            
+            // Mostra barra di progresso
+            progressBarDiv.style.display = 'block';
+            
+            const stepNames = {
+                'fetching': '📡 Raccolta URL da feed RSS',
+                'processing': '⚙️ Processamento articoli',
+                'extracting': '📄 Estrazione contenuto',
+                'rewriting': '✨ Riscrittura con AI',
+                'completed': '✅ Completato!'
+            };
+            
+            const stepName = stepNames[status.current_step] || status.current_step || 'In corso...';
+            const currentArticle = status.current_article;
+            
+            // Calcola percentuale
+            const total = status.total_candidates || 1;
+            const processed = status.processed || 0;
+            const percent = Math.min(100, Math.round((processed / total) * 100));
+            
+            // Aggiorna barra di progresso
+            document.getElementById('progressBarFill').style.width = percent + '%';
+            document.getElementById('progressPercent').textContent = percent + '%';
+            
+            // Aggiorna step corrente
+            let stepText = stepName;
+            if (currentArticle && status.status === 'running') {
+                stepText += ` - Articolo ${currentArticle.number}/${currentArticle.total}`;
+            }
+            document.getElementById('currentStep').innerHTML = `<strong style="color: #667eea;">${stepText}</strong>`;
+            
+            // Aggiorna log
+            const logDiv = document.getElementById('progressLog');
+            if (status.messages && status.messages.length > 0) {
+                logDiv.innerHTML = status.messages.map(msg => {
+                    const time = new Date(msg.timestamp).toLocaleTimeString('it-IT');
+                    let icon = '📡';
+                    let color = '#e5e7eb';
+                    
+                    // Determina icona e colore in base al messaggio
+                    if (msg.message.includes('✅')) {
+                        icon = '✅';
+                        color = '#10b981';
+                    } else if (msg.message.includes('⚠️') || msg.message.includes('non disponibile')) {
+                        icon = '⚠️';
+                        color = '#f59e0b';
+                    } else if (msg.message.includes('❌') || msg.message.includes('Errore')) {
+                        icon = '❌';
+                        color = '#ef4444';
+                    } else if (msg.step === 'processing') {
+                        icon = '⚙️';
+                    } else if (msg.step === 'extracting') {
+                        icon = '📄';
+                    } else if (msg.step === 'rewriting') {
+                        icon = '✨';
+                    }
+                    
+                    return `<div style="margin-bottom: 0.25rem; color: ${color};"><span style="color: #9ca3af;">[${time}]</span> ${icon} ${msg.message}</div>`;
+                }).join('');
+                // Scroll to bottom
+                logDiv.parentElement.scrollTop = logDiv.parentElement.scrollHeight;
+            }
+            
+            // Box status compatto (mantenuto per retrocompatibilità)
+            let content = `
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: #92400e;">${stepName}</strong>
+                        <span style="font-size: 0.85rem; color: #78350f;">${processed}/${total} articoli (${percent}%)</span>
+                    </div>
+            `;
+            
+            if (status.status === 'completed') {
+                content += `
+                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #fde68a;">
+                        <div style="color: #065f46;">
+                            <strong>✅ Completato!</strong>
+                            <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                                Processati: ${status.processed || 0} | 
+                                Creati: ${status.created || 0} | 
+                                Saltati: ${status.skipped || 0} | 
+                                Falliti: ${status.failed || 0}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Riabilita pulsante
+                const btn = document.getElementById('extractBtn');
+                btn.disabled = false;
+                btn.textContent = '📰 Estrai Nuovi Articoli';
+                btn.style.background = '#10b981';
+                
+                // Nascondi barra dopo 10 secondi
+                setTimeout(() => {
+                    progressBarDiv.style.display = 'none';
+                }, 10000);
+            }
+            
+            content += '</div>';
+            pipelineStatusDiv.innerHTML = content;
+        }
+
+        // Carica dati al caricamento pagina
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            // Controlla se c'è una pipeline in esecuzione
+            fetch('/api/pipeline-status')
+                .then(r => r.json())
+                .then(status => {
+                    if (status.status === 'running') {
+                        document.getElementById('pipelineStatus').style.display = 'block';
+                        startStatusPolling();
+                    }
+                });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+{
+  "extracted_article": {
+    "url": "https://www.bbc.com/news/technology-12345678",
+    "canonical_url": "https://www.bbc.com/news/technology-12345678",
+    "title": "AI breakthrough promises faster medical diagnosis",
+    "text": "Scientists have developed a new artificial intelligence system that can diagnose medical conditions faster than traditional methods. The system uses machine learning algorithms trained on millions of medical images...",
+    "html": "<article><h1>AI breakthrough promises faster medical diagnosis</h1><p>Scientists have developed...</p></article>",
+    "images": [
+      "https://ichef.bbci.co.uk/news/1024/cpsprodpb/ABCD/image.jpg"
+    ],
+    "published_at": "2024-01-15T10:30:00",
+    "author": "John Smith",
+    "source_name": "BBC News",
+    "extracted_at": "2024-01-15T12:00:00",
+    "raw_html_path": "./data/cache/raw_https___www_bbc_com_news_technology-12345678.html",
+    "extracted_json_path": "./data/cache/extracted_https___www_bbc_com_news_technology-12345678.json"
+  },
+  "rewritten_article": {
+    "headline": "Nuovo sistema AI per diagnosi medica più rapide",
+    "lead": "Un team di ricercatori ha sviluppato un sistema di intelligenza artificiale in grado di diagnosticare condizioni mediche con maggiore rapidità rispetto ai metodi tradizionali. Il sistema utilizza algoritmi di machine learning addestrati su milioni di immagini mediche.",
+    "body_markdown": "## Introduzione\n\nUn nuovo sistema di intelligenza artificiale promette di rivoluzionare il campo della diagnostica medica, offrendo tempi di analisi significativamente ridotti rispetto alle metodologie convenzionali.\n\n## Sviluppo tecnologico\n\nIl sistema sviluppato dai ricercatori si basa su algoritmi di apprendimento automatico che sono stati addestrati utilizzando un vasto database composto da milioni di immagini mediche. Questo approccio consente al sistema di riconoscere pattern e anomalie con un livello di precisione elevato.\n\n## Implicazioni pratiche\n\nL'implementazione di questa tecnologia potrebbe portare a diagnosi più tempestive, permettendo ai medici di intervenire con maggiore rapidità e migliorando potenzialmente gli esiti per i pazienti.",
+    "tags": ["tecnologia", "medicina", "intelligenza artificiale", "salute"],
+    "category": "tecnologia",
+    "meta_title": "AI per diagnosi medica: nuovo sistema più rapido",
+    "meta_description": "Sistema di intelligenza artificiale sviluppato per accelerare le diagnosi mediche utilizzando machine learning su immagini cliniche.",
+    "word_count": 485,
+    "rewritten_at": "2024-01-15T12:05:00"
+  },
+  "quality_check": {
+    "ok": true,
+    "issues": [],
+    "risk_level": "low",
+    "similarity_score": 0.42,
+    "needs_review": false
+  },
+  "wordpress_post": {
+    "post_id": 123,
+    "status": "draft",
+    "url": "https://tuo-sito.com/wp-admin/post.php?post=123&action=edit",
+    "meta_fields": {
+      "source_name": "BBC News",
+      "source_url": "https://www.bbc.com/news/technology-12345678",
+      "source_published_at": "2024-01-15T10:30:00",
+      "ingest_timestamp": "2024-01-15T12:05:00",
+      "source_hash": "https://www.bbc.com/news/technology-12345678",
+      "ai_version": "1.0",
+      "risk_level": "low",
+      "needs_review": "0",
+      "original_title": "AI breakthrough promises faster medical diagnosis"
+    }
+  },
+  "audit_log": {
+    "timestamp": "2024-01-15T12:05:30",
+    "operation": "pipeline",
+    "url": "https://www.bbc.com/news/technology-12345678",
+    "status": "created",
+    "post_id": 123,
+    "timing": {
+      "extract": 2.5,
+      "dedupe": 0.3,
+      "rewrite": 8.2,
+      "quality": 1.1,
+      "wp_post": 3.4,
+      "total": 15.5
+    },
+    "details": {}
+  }
+}

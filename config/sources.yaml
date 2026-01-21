@@ -1,0 +1,78 @@
+# Configurazione fonti RSS e whitelist domini
+# Feed RSS per siti italiani di notizie
+
+rss_feeds:
+  # Corriere della Sera
+  - url: "https://www.corriere.it/rss/homepage.xml"
+    name: "Corriere della Sera - Homepage"
+    enabled: true
+  - url: "https://www.corriere.it/rss/politica.xml"
+    name: "Corriere della Sera - Politica"
+    enabled: true
+  - url: "https://www.corriere.it/rss/cronache.xml"
+    name: "Corriere della Sera - Cronache"
+    enabled: true
+  - url: "https://www.corriere.it/rss/economia.xml"
+    name: "Corriere della Sera - Economia"
+    enabled: true
+  
+  # La Repubblica
+  - url: "https://www.repubblica.it/rss/homepage/rss2.0.xml"
+    name: "La Repubblica - Homepage"
+    enabled: true
+  - url: "https://www.repubblica.it/rss/politica/rss2.0.xml"
+    name: "La Repubblica - Politica"
+    enabled: true
+  - url: "https://www.repubblica.it/rss/cronaca/rss2.0.xml"
+    name: "La Repubblica - Cronaca"
+    enabled: true
+  - url: "https://www.repubblica.it/rss/economia/rss2.0.xml"
+    name: "La Repubblica - Economia"
+    enabled: true
+  
+  # Il Messaggero (feed da verificare)
+  - url: "https://www.ilmessaggero.it/rss/home.xml"
+    name: "Il Messaggero - Homepage"
+    enabled: true
+  - url: "https://www.ilmessaggero.it/rss/cronaca.xml"
+    name: "Il Messaggero - Cronaca"
+    enabled: true
+  - url: "https://www.ilmessaggero.it/rss/politica.xml"
+    name: "Il Messaggero - Politica"
+    enabled: true
+  
+  # Sky TG24 (feed non disponibili - disabilitati)
+  - url: "https://tg24.sky.it/rss/home.xml"
+    name: "Sky TG24 - Homepage"
+    enabled: false  # Feed non disponibile (404)
+  - url: "https://tg24.sky.it/rss/cronaca.xml"
+    name: "Sky TG24 - Cronaca"
+    enabled: false  # Feed non disponibile (404)
+  
+  # Il Giornale
+  - url: "https://www.ilgiornale.it/rss.xml"
+    name: "Il Giornale - Homepage"
+    enabled: true
+  - url: "https://www.ilgiornale.it/rss/politica.xml"
+    name: "Il Giornale - Politica"
+    enabled: false  # Feed non disponibile (404)
+
+whitelist_domains:
+  enabled: false  # Se true, accetta solo domini in questa lista
+  domains:
+    - "corriere.it"
+    - "repubblica.it"
+    - "ilmessaggero.it"
+    - "tg24.sky.it"
+    - "ilgiornale.it"
+    # Aggiungi altri domini consentiti
+
+# Rate limiting
+rate_limit:
+  requests_per_minute: 10
+  delay_between_requests: 6  # secondi
+
+# Timeout
+timeouts:
+  download: 30  # secondi
+  api_call: 60  # secondi

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Articolo Riscritto - News Pipeline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.9;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header a:hover {
+            opacity: 1;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .article-header {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .article-source {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .ai-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin-left: 0.5rem;
+        }
+
+        .article-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #1f2937;
+            line-height: 1.2;
+        }
+
+        .article-meta {
+            display: flex;
+            gap: 1.5rem;
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .article-image {
+            width: 100%;
+            max-height: 500px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+
+        .article-lead {
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: #f9fafb;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .article-body {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+
+        .article-body h2 {
+            font-size: 1.8rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #1f2937;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+
+        .article-body h2:first-child {
+            margin-top: 0;
+        }
+
+        .article-body p {
+            margin-bottom: 1.5rem;
+            color: #374151;
+        }
+
+        .article-body ul, .article-body ol {
+            margin-left: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .article-body li {
+            margin-bottom: 0.5rem;
+        }
+
+        .article-tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .tag {
+            background: #e5e7eb;
+            color: #374151;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .original-link {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f9fafb;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .original-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .original-link a:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .error {
+            text-align: center;
+            padding: 4rem;
+            color: #ef4444;
+        }
+
+        .comparison-toggle {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .comparison-toggle button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-right: 1rem;
+        }
+
+        .comparison-toggle button:hover {
+            background: #5568d3;
+        }
+
+        .original-content {
+            display: none;
+            margin-top: 1rem;
+            padding: 1.5rem;
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            border-radius: 4px;
+        }
+
+        .original-content.show {
+            display: block;
+        }
+
+        .original-content h3 {
+            color: #92400e;
+            margin-bottom: 1rem;
+        }
+
+        .original-content p {
+            color: #78350f;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/">
+            ← Torna alla Dashboard
+        </a>
+    </div>
+
+    <div class="container">
+        <div id="loading" class="loading">
+            Caricamento articolo...
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <h2>Errore</h2>
+            <p id="errorMessage"></p>
+        </div>
+
+        <div id="articleContent" style="display: none;">
+            <div class="article-header">
+                <div>
+                    <span class="article-source" id="articleSource"></span>
+                    <span class="ai-badge">✨ Articolo Riscritto con AI</span>
+                </div>
+                <h1 class="article-title" id="articleTitle"></h1>
+                <div class="article-meta">
+                    <span id="articleDate"></span>
+                    <span>Categoria: <strong id="articleCategory"></strong></span>
+                    <span id="articleWordCount"></span>
+                </div>
+            </div>
+
+            <img id="articleImage" class="article-image" style="display: none;" alt="Immagine articolo">
+
+            <div class="article-lead" id="articleLead"></div>
+
+            <div class="article-body" id="articleBody"></div>
+
+            <div class="article-tags" id="articleTags"></div>
+
+            <div class="comparison-toggle">
+                <button onclick="toggleOriginal()">Mostra/Nascondi Articolo Originale</button>
+            </div>
+
+            <div class="original-content" id="originalContent">
+                <h3>📄 Articolo Originale</h3>
+                <p><strong>Titolo:</strong> <span id="originalTitle"></span></p>
+                <p><strong>Testo:</strong></p>
+                <div id="originalText" style="white-space: pre-wrap; margin-top: 1rem;"></div>
+            </div>
+
+            <div class="original-link">
+                <a id="originalLink" href="#" target="_blank">→ Leggi articolo originale su {{source}}</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ottieni ID articolo da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const articleUrl = urlParams.get('url');
+
+        if (!articleUrl) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('errorMessage').textContent = 'URL articolo non specificato';
+        } else {
+            loadArticle(articleUrl);
+        }
+
+        async function loadArticle(url) {
+            try {
+                // Cerca articolo nell'API
+                const response = await fetch(`/api/article-by-url?url=${encodeURIComponent(url)}`);
+                
+                if (!response.ok) {
+                    throw new Error('Articolo non trovato');
+                }
+
+                const article = await response.json();
+                displayArticle(article);
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('errorMessage').textContent = error.message;
+            }
+        }
+
+        function displayArticle(article) {
+            const rewritten = article.rewritten || {};
+            const original = article.original || article;
+
+            // Header
+            document.getElementById('articleSource').textContent = article.source_name || 'Fonte sconosciuta';
+            document.getElementById('articleTitle').textContent = rewritten.headline || article.title || 'Nessun titolo';
+            document.getElementById('articleDate').textContent = article.published_at ? 
+                new Date(article.published_at).toLocaleDateString('it-IT', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                }) : 'Data sconosciuta';
+            document.getElementById('articleCategory').textContent = rewritten.category || 'news';
+            document.getElementById('articleWordCount').textContent = rewritten.word_count ? 
+                `${rewritten.word_count} parole` : '';
+
+            // Immagine
+            if (article.images && article.images.length > 0) {
+                const img = document.getElementById('articleImage');
+                img.src = article.images[0];
+                img.style.display = 'block';
+                img.onerror = () => img.style.display = 'none';
+            }
+
+            // Lead
+            document.getElementById('articleLead').textContent = rewritten.lead || '';
+
+            // Body (converte markdown a HTML semplice)
+            const bodyText = rewritten.body_markdown || '';
+            const bodyHtml = convertMarkdownToHtml(bodyText);
+            document.getElementById('articleBody').innerHTML = bodyHtml;
+
+            // Tags
+            const tagsContainer = document.getElementById('articleTags');
+            if (rewritten.tags && rewritten.tags.length > 0) {
+                tagsContainer.innerHTML = rewritten.tags.map(tag => 
+                    `<span class="tag">${tag}</span>`
+                ).join('');
+            } else {
+                tagsContainer.style.display = 'none';
+            }
+
+            // Originale
+            document.getElementById('originalTitle').textContent = original.title || '';
+            document.getElementById('originalText').textContent = original.text ? 
+                original.text.substring(0, 1000) + (original.text.length > 1000 ? '...' : '') : '';
+            document.getElementById('originalLink').href = article.url || '#';
+            document.getElementById('originalLink').textContent = `→ Leggi articolo originale su ${article.source_name || 'fonte originale'}`;
+
+            // Mostra contenuto
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('articleContent').style.display = 'block';
+        }
+
+        function convertMarkdownToHtml(markdown) {
+            if (!markdown) return '';
+            
+            let html = markdown;
+            
+            // Headers
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+            
+            // Bold
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Italic
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Links
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+            
+            // Paragraphs
+            html = html.split('\n\n').map(p => {
+                p = p.trim();
+                if (p && !p.startsWith('<h') && !p.startsWith('<ul') && !p.startsWith('<ol')) {
+                    return `<p>${p}</p>`;
+                }
+                return p;
+            }).join('\n');
+            
+            // Lists
+            html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            
+            return html;
+        }
+
+        function toggleOriginal() {
+            const content = document.getElementById('originalContent');
+            content.classList.toggle('show');
+        }
+    </script>
+</body>
+</html>
