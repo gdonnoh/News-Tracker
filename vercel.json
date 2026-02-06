@@ -3,7 +3,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "frontend/server.py"
+      "dest": "/api/server"
     }
   ],
   "env": {
@@ -11,7 +11,7 @@
     "VERCEL": "1"
   },
   "functions": {
-    "frontend/server.py": {
+    "api/server.py": {
       "maxDuration": 30,
       "memory": 2048
     }
