@@ -235,20 +235,62 @@ def get_candidates():
 def _refresh_candidates():
     """Fetch all RSS feeds and store candidates in the database."""
     import yaml
-    from src.fetch_sources import SourceFetcher
+    try:
+        from src.fetch_sources import SourceFetcher
+    except Exception as e:
+        SourceFetcher = None
+        fetcher_import_error = e
 
     config_path = BASE_DIR / "config" / "sources.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         sources_config = yaml.safe_load(f) or {}
 
-    fetcher = SourceFetcher(
-        sources_config=sources_config,
-        dedupe_db_path=str(DEDUPE_DB),
-        rate_limit_delay=sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0),
-        timeout=sources_config.get("timeouts", {}).get("download", 30),
-    )
+    all_candidates = []
 
-    all_candidates = fetcher.fetch_all(limit=None)
+    if SourceFetcher:
+        fetcher = SourceFetcher(
+            sources_config=sources_config,
+            dedupe_db_path=str(DEDUPE_DB),
+            rate_limit_delay=sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0),
+            timeout=sources_config.get("timeouts", {}).get("download", 30),
+        )
+        all_candidates = fetcher.fetch_all(limit=None)
+    else:
+        # Fallback: minimal RSS fetch (avoids import issues)
+        import feedparser as fp
+        import requests
+        from dateutil import parser as date_parser
+
+        delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
+        timeout = sources_config.get("timeouts", {}).get("download", 30)
+        feeds = sources_config.get("rss_feeds", [])
+
+        for i, feed_cfg in enumerate(feeds):
+            if not feed_cfg.get("enabled", True):
+                continue
+            if i > 0:
+                time.sleep(delay)
+            resp = requests.get(feed_cfg["url"], timeout=timeout)
+            resp.raise_for_status()
+            parsed = fp.parse(resp.content)
+            for entry in parsed.entries:
+                url = entry.get("link", "")
+                if not url:
+                    continue
+                published_at = entry.get("published")
+                try:
+                    date_parser.parse(published_at) if published_at else None
+                except Exception:
+                    pass
+                all_candidates.append({
+                    "url": url,
+                    "source": feed_cfg.get("name", feed_cfg["url"]),
+                    "published_at": published_at,
+                    "title": entry.get("title", ""),
+                    "description": entry.get("description", ""),
+                })
+
+        print(f"Fallback RSS fetch used due to import error: {fetcher_import_error}")
     now = datetime.now().isoformat()
 
     with db_connection(DEDUPE_DB) as conn:
@@ -290,16 +332,22 @@ def refresh_candidates_stream():
                 yield f"data: {json.dumps({'type': 'complete', 'total_candidates': 0})}\n\n"
                 return
 
-            from src.fetch_sources import SourceFetcher
+            try:
+                from src.fetch_sources import SourceFetcher
+            except Exception as e:
+                SourceFetcher = None
+                fetcher_import_error = e
 
             delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
-            fetcher = SourceFetcher(
-                sources_config=sources_config,
-                dedupe_db_path=str(DEDUPE_DB),
-                rate_limit_delay=delay,
-                timeout=sources_config.get("timeouts", {}).get("download", 30),
-            )
-            fetcher._load_processed_cache()
+            fetcher = None
+            if SourceFetcher:
+                fetcher = SourceFetcher(
+                    sources_config=sources_config,
+                    dedupe_db_path=str(DEDUPE_DB),
+                    rate_limit_delay=delay,
+                    timeout=sources_config.get("timeouts", {}).get("download", 30),
+                )
+                fetcher._load_processed_cache()
 
             all_candidates = []
 
@@ -312,7 +360,11 @@ def refresh_candidates_stream():
                     if i > 0:
                         time.sleep(delay)
 
-                    resp = fetcher.session.get(feed_cfg["url"], timeout=fetcher.timeout)
+                    if fetcher:
+                        resp = fetcher.session.get(feed_cfg["url"], timeout=fetcher.timeout)
+                    else:
+                        import requests
+                        resp = requests.get(feed_cfg["url"], timeout=sources_config.get("timeouts", {}).get("download", 30))
                     resp.raise_for_status()
 
                     parsed = fp.parse(resp.content)
@@ -320,14 +372,20 @@ def refresh_candidates_stream():
 
                     for entry in parsed.entries:
                         url = entry.get("link", "")
-                        if not url or not fetcher._is_domain_allowed(url):
-                            continue
-                        if fetcher._is_url_processed(url):
+                        if not url:
                             continue
 
-                        pub_str, pub_dt = fetcher._parse_entry_date(entry)
-                        if fetcher._is_too_old(pub_dt):
-                            continue
+                        if fetcher:
+                            if not fetcher._is_domain_allowed(url):
+                                continue
+                            if fetcher._is_url_processed(url):
+                                continue
+                            pub_str, pub_dt = fetcher._parse_entry_date(entry)
+                            if fetcher._is_too_old(pub_dt):
+                                continue
+                        else:
+                            pub_str = entry.get("published")
+                            pub_dt = None
 
                         all_candidates.append({
                             "url": url,
@@ -337,7 +395,8 @@ def refresh_candidates_stream():
                             "description": entry.get("description", ""),
                         })
                         count += 1
-                        fetcher._mark_url_seen(url, processed=False)
+                        if fetcher:
+                            fetcher._mark_url_seen(url, processed=False)
 
                     done_pct = round((i + 1) / total * 100)
                     yield f"data: {json.dumps({'type': 'feed_done', 'feed': name, 'index': i, 'total': total, 'articles': count, 'pct': done_pct})}\n\n"
