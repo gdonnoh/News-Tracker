@@ -3,422 +3,764 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Articolo Riscritto - News Pipeline</title>
+    <title>Articolo - News Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg: #f8fafc;
+            --bg-subtle: #f1f5f9;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --ink: #0f172a;
+            --ink-secondary: #475569;
+            --ink-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-subtle: #eff6ff;
+            --accent-border: #bfdbfe;
+            --success: #10b981;
+            --success-subtle: #ecfdf5;
+            --success-border: #a7f3d0;
+            --warning: #f59e0b;
+            --warning-subtle: #fffbeb;
+            --warning-border: #fde68a;
+            --error: #ef4444;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 16px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.8;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        /* ─── Reading Progress ─── */
+        .reading-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), #6366f1);
+            z-index: 200;
+            transition: width 0.1s linear;
         }
 
-        .header a {
-            color: white;
-            text-decoration: none;
-            opacity: 0.9;
+        /* ─── Top bar ─── */
+        .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            background: rgba(255,255,255,0.92);
+        }
+
+        .topbar-back {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: color var(--transition);
+        }
+        .topbar-back:hover { color: var(--accent); }
+
+        .topbar-back svg {
+            width: 18px;
+            height: 18px;
         }
 
-        .header a:hover {
-            opacity: 1;
+        .topbar-badges {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
         }
 
-        .container {
-            max-width: 900px;
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-source {
+            color: white;
+        }
+
+        .badge-ai {
+            background: var(--success-subtle);
+            color: #065f46;
+            border: 1px solid var(--success-border);
+        }
+
+        /* ─── Article Layout ─── */
+        .article-container {
+            max-width: 760px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 2.5rem 2rem 4rem;
         }
 
+        /* ─── Header ─── */
         .article-header {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 2rem;
         }
 
-        .article-source {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
+        .article-meta-top {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 1.25rem;
+            font-size: 0.8125rem;
+            color: var(--ink-muted);
         }
 
-        .ai-badge {
-            display: inline-block;
-            background: #10b981;
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            margin-left: 0.5rem;
+        .article-meta-sep {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--ink-muted);
+            opacity: 0.5;
         }
 
         .article-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            color: #1f2937;
+            font-family: "Newsreader", Georgia, serif;
+            font-size: clamp(1.75rem, 4vw, 2.5rem);
+            font-weight: 600;
             line-height: 1.2;
-        }
-
-        .article-meta {
-            display: flex;
-            gap: 1.5rem;
-            color: #6b7280;
-            font-size: 0.9rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .article-image {
-            width: 100%;
-            max-height: 500px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-bottom: 2rem;
+            color: var(--ink);
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.01em;
         }
 
         .article-lead {
-            font-size: 1.3rem;
-            font-weight: 500;
-            color: #374151;
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            background: #f9fafb;
-            border-left: 4px solid #667eea;
-            border-radius: 4px;
+            font-size: 1.125rem;
+            line-height: 1.6;
+            color: var(--ink-secondary);
+            padding: 1.25rem;
+            border-left: 3px solid var(--accent);
+            background: var(--accent-subtle);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
         }
 
+        /* ─── Hero Image ─── */
+        .article-hero {
+            width: 100%;
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .article-hero img {
+            width: 100%;
+            max-height: 440px;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* ─── Article Body ─── */
         .article-body {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            font-size: 1.1rem;
-            line-height: 1.8;
+            font-family: "Newsreader", Georgia, serif;
+            font-size: 1.125rem;
+            line-height: 1.85;
+            color: var(--ink);
         }
 
         .article-body h2 {
-            font-size: 1.8rem;
-            margin-top: 2rem;
-            margin-bottom: 1rem;
-            color: #1f2937;
-            border-bottom: 2px solid #e5e7eb;
+            font-family: "Inter", sans-serif;
+            font-size: 1.375rem;
+            font-weight: 600;
+            margin-top: 2.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--ink);
             padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-light);
         }
 
-        .article-body h2:first-child {
-            margin-top: 0;
+        .article-body h2:first-child { margin-top: 0; }
+
+        .article-body h3 {
+            font-family: "Inter", sans-serif;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
         }
 
         .article-body p {
-            margin-bottom: 1.5rem;
-            color: #374151;
+            margin-bottom: 1.25rem;
+            color: #1e293b;
         }
 
         .article-body ul, .article-body ol {
-            margin-left: 2rem;
-            margin-bottom: 1.5rem;
+            margin-left: 1.5rem;
+            margin-bottom: 1.25rem;
         }
 
         .article-body li {
             margin-bottom: 0.5rem;
         }
 
+        .article-body a {
+            color: var(--accent);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .article-body strong {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .article-body blockquote {
+            border-left: 3px solid var(--border);
+            padding-left: 1.25rem;
+            margin: 1.5rem 0;
+            color: var(--ink-secondary);
+            font-style: italic;
+        }
+
+        /* ─── Tags ─── */
         .article-tags {
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 1px solid #e5e7eb;
+            margin-top: 2.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
         }
 
         .tag {
-            background: #e5e7eb;
-            color: #374151;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
+            display: inline-flex;
+            padding: 0.375rem 0.875rem;
+            background: var(--bg-subtle);
+            color: var(--ink-secondary);
+            border-radius: 999px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            font-family: "Inter", sans-serif;
         }
 
-        .original-link {
+        /* ─── Quality Gate Panel ─── */
+        .quality-panel {
             margin-top: 2rem;
-            padding: 1rem;
-            background: #f9fafb;
-            border-radius: 8px;
-            text-align: center;
+            padding: 1.25rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--surface);
         }
 
-        .original-link a {
-            color: #667eea;
-            text-decoration: none;
+        .quality-panel-title {
+            font-size: 0.8125rem;
             font-weight: 600;
+            color: var(--ink-secondary);
+            margin-bottom: 0.75rem;
+            font-family: "Inter", sans-serif;
         }
 
-        .original-link a:hover {
-            text-decoration: underline;
+        .quality-meter {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
         }
 
-        .loading {
-            text-align: center;
-            padding: 4rem;
-            color: #667eea;
-            font-size: 1.2rem;
+        .quality-meter-label {
+            font-size: 0.8125rem;
+            color: var(--ink-muted);
+            min-width: 80px;
+            font-family: "Inter", sans-serif;
         }
 
-        .error {
-            text-align: center;
-            padding: 4rem;
-            color: #ef4444;
+        .quality-meter-track {
+            flex: 1;
+            height: 6px;
+            background: var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .quality-meter-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.8s ease;
+        }
+
+        .quality-meter-value {
+            font-size: 0.875rem;
+            font-weight: 700;
+            min-width: 50px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-family: "Inter", sans-serif;
+        }
+
+        .quality-issues {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-light);
+            font-size: 0.8125rem;
+            color: var(--ink-muted);
+            font-family: "Inter", sans-serif;
+        }
+
+        /* ─── Original Comparison ─── */
+        .comparison-section {
+            margin-top: 2rem;
         }
 
         .comparison-toggle {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: #f9fafb;
-            border-radius: 8px;
-        }
-
-        .comparison-toggle button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            font-size: 1rem;
-            margin-right: 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            transition: all var(--transition);
+            font-family: "Inter", sans-serif;
         }
 
-        .comparison-toggle button:hover {
-            background: #5568d3;
+        .comparison-toggle:hover {
+            border-color: var(--accent-border);
+            color: var(--accent);
         }
 
-        .original-content {
-            display: none;
+        .comparison-toggle svg {
+            width: 16px;
+            height: 16px;
+            transition: transform var(--transition);
+        }
+
+        .comparison-toggle.open svg {
+            transform: rotate(180deg);
+        }
+
+        .comparison-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease, margin 0.35s ease, opacity 0.25s ease;
+            opacity: 0;
+            margin-top: 0;
+        }
+
+        .comparison-content.open {
+            max-height: 2000px;
+            opacity: 1;
             margin-top: 1rem;
-            padding: 1.5rem;
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            border-radius: 4px;
         }
 
-        .original-content.show {
-            display: block;
+        .comparison-box {
+            padding: 1.25rem;
+            background: var(--warning-subtle);
+            border: 1px solid var(--warning-border);
+            border-radius: var(--radius);
         }
 
-        .original-content h3 {
+        .comparison-box-title {
+            font-size: 0.875rem;
+            font-weight: 600;
             color: #92400e;
+            margin-bottom: 0.75rem;
+            font-family: "Inter", sans-serif;
+        }
+
+        .comparison-box-field {
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            color: #78350f;
+        }
+
+        .comparison-box-field strong {
+            display: block;
+            margin-bottom: 0.25rem;
+            color: #92400e;
+        }
+
+        .comparison-box-text {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-size: 0.875rem;
+            color: #78350f;
+        }
+
+        /* ─── Footer link ─── */
+        .article-footer {
+            margin-top: 2.5rem;
+            padding: 1.25rem;
+            background: var(--bg-subtle);
+            border-radius: var(--radius);
+            text-align: center;
+            font-family: "Inter", sans-serif;
+        }
+
+        .article-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9375rem;
+        }
+        .article-footer a:hover { text-decoration: underline; }
+
+        /* ─── States ─── */
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 6rem 2rem;
+            color: var(--ink-muted);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
             margin-bottom: 1rem;
         }
 
-        .original-content p {
-            color: #78350f;
-            font-size: 0.95rem;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-state {
+            text-align: center;
+            padding: 6rem 2rem;
+            color: var(--error);
+        }
+
+        .error-state h2 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .error-state p {
+            color: var(--ink-muted);
+        }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 768px) {
+            .topbar { padding: 0 1rem; }
+            .article-container { padding: 1.5rem 1rem 3rem; }
+            .article-title { font-size: 1.625rem; }
+            .article-body { font-size: 1rem; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <a href="/">
-            ← Torna alla Dashboard
+    <!-- Reading progress bar -->
+    <div class="reading-progress" id="readingProgress"></div>
+
+    <!-- Top bar -->
+    <div class="topbar">
+        <a href="/" class="topbar-back">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Dashboard
         </a>
+        <div class="topbar-badges" id="topbarBadges"></div>
     </div>
 
-    <div class="container">
-        <div id="loading" class="loading">
-            Caricamento articolo...
-        </div>
+    <!-- Loading -->
+    <div id="loadingState" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Caricamento articolo...</p>
+    </div>
 
-        <div id="error" class="error" style="display: none;">
-            <h2>Errore</h2>
-            <p id="errorMessage"></p>
-        </div>
+    <!-- Error -->
+    <div id="errorState" class="error-state" style="display:none;">
+        <h2>Errore</h2>
+        <p id="errorMessage"></p>
+    </div>
 
-        <div id="articleContent" style="display: none;">
+    <!-- Article content -->
+    <div id="articleContent" style="display:none;">
+        <div class="article-container">
+            <!-- Header -->
             <div class="article-header">
-                <div>
-                    <span class="article-source" id="articleSource"></span>
-                    <span class="ai-badge">✨ Articolo Riscritto con AI</span>
-                </div>
-                <h1 class="article-title" id="articleTitle"></h1>
-                <div class="article-meta">
+                <div class="article-meta-top">
                     <span id="articleDate"></span>
-                    <span>Categoria: <strong id="articleCategory"></strong></span>
+                    <span class="article-meta-sep"></span>
+                    <span id="articleCategory"></span>
+                    <span class="article-meta-sep"></span>
                     <span id="articleWordCount"></span>
                 </div>
+                <h1 class="article-title" id="articleTitle"></h1>
+                <div class="article-lead" id="articleLead"></div>
             </div>
 
-            <img id="articleImage" class="article-image" style="display: none;" alt="Immagine articolo">
+            <!-- Hero image -->
+            <div class="article-hero" id="articleHero" style="display:none;">
+                <img id="articleImage" alt="Immagine articolo">
+            </div>
 
-            <div class="article-lead" id="articleLead"></div>
-
+            <!-- Body -->
             <div class="article-body" id="articleBody"></div>
 
-            <div class="article-tags" id="articleTags"></div>
+            <!-- Tags -->
+            <div class="article-tags" id="articleTags" style="display:none;"></div>
 
-            <div class="comparison-toggle">
-                <button onclick="toggleOriginal()">Mostra/Nascondi Articolo Originale</button>
+            <!-- Quality Gate -->
+            <div class="quality-panel" id="qualityPanel" style="display:none;">
+                <div class="quality-panel-title">Quality Gate</div>
+                <div id="qualityContent"></div>
             </div>
 
-            <div class="original-content" id="originalContent">
-                <h3>📄 Articolo Originale</h3>
-                <p><strong>Titolo:</strong> <span id="originalTitle"></span></p>
-                <p><strong>Testo:</strong></p>
-                <div id="originalText" style="white-space: pre-wrap; margin-top: 1rem;"></div>
+            <!-- Comparison -->
+            <div class="comparison-section">
+                <button class="comparison-toggle" id="compToggle" onclick="toggleComparison()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    Mostra articolo originale
+                </button>
+                <div class="comparison-content" id="compContent">
+                    <div class="comparison-box">
+                        <div class="comparison-box-title">Articolo Originale</div>
+                        <div class="comparison-box-field">
+                            <strong>Titolo</strong>
+                            <span id="originalTitle"></span>
+                        </div>
+                        <div class="comparison-box-field">
+                            <strong>Testo</strong>
+                        </div>
+                        <div class="comparison-box-text" id="originalText"></div>
+                    </div>
+                </div>
             </div>
 
-            <div class="original-link">
-                <a id="originalLink" href="#" target="_blank">→ Leggi articolo originale su {{source}}</a>
+            <!-- Footer -->
+            <div class="article-footer">
+                <a id="originalLink" href="#" target="_blank">Leggi l'articolo originale</a>
             </div>
         </div>
     </div>
 
     <script>
-        // Ottieni ID articolo da URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const articleUrl = urlParams.get('url');
+    /* ─── Reading Progress ─── */
+    window.addEventListener('scroll', () => {
+        const bar = document.getElementById('readingProgress');
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight > 0) {
+            bar.style.width = Math.min(100, (window.scrollY / docHeight) * 100) + '%';
+        }
+    });
 
-        if (!articleUrl) {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').style.display = 'block';
-            document.getElementById('errorMessage').textContent = 'URL articolo non specificato';
+    /* ─── Comparison Toggle ─── */
+    function toggleComparison() {
+        const toggle = document.getElementById('compToggle');
+        const content = document.getElementById('compContent');
+        toggle.classList.toggle('open');
+        content.classList.toggle('open');
+
+        const isOpen = content.classList.contains('open');
+        toggle.innerHTML = `
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            ${isOpen ? 'Nascondi articolo originale' : 'Mostra articolo originale'}
+        `;
+    }
+
+    /* ─── Load Article ─── */
+    const urlParams = new URLSearchParams(window.location.search);
+    const articleUrl = urlParams.get('url');
+
+    if (!articleUrl) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('errorState').style.display = 'block';
+        document.getElementById('errorMessage').textContent = 'URL articolo non specificato';
+    } else {
+        loadArticle(articleUrl);
+    }
+
+    async function loadArticle(url) {
+        try {
+            const response = await fetch(`/api/article-by-url?url=${encodeURIComponent(url)}`);
+            if (!response.ok) throw new Error('Articolo non trovato');
+            const article = await response.json();
+            displayArticle(article);
+        } catch (error) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('errorMessage').textContent = error.message;
+        }
+    }
+
+    function getSourceColor(source) {
+        if (!source) return '#64748b';
+        const s = source.toLowerCase();
+        if (s.includes('messaggero')) return '#ea580c';
+        if (s.includes('repubblica')) return '#dc2626';
+        if (s.includes('corriere')) return '#1e293b';
+        if (s.includes('giornale')) return '#2563eb';
+        if (s.includes('ansa')) return '#0d9488';
+        if (s.includes('rai')) return '#7c3aed';
+        if (s.includes('tgcom')) return '#0891b2';
+        if (s.includes('sky')) return '#0284c7';
+        return '#64748b';
+    }
+
+    function displayArticle(article) {
+        const rewritten = article.rewritten || {};
+        const original = article.original || article;
+        const qg = article.quality_gate || {};
+        const sourceName = article.source_name || original.source_name || 'Fonte sconosciuta';
+
+        // Top bar badges
+        document.getElementById('topbarBadges').innerHTML = `
+            <span class="badge badge-source" style="background:${getSourceColor(sourceName)}">${sourceName}</span>
+            <span class="badge badge-ai">AI Riscritto</span>
+        `;
+
+        // Title
+        document.title = (rewritten.headline || original.title || 'Articolo') + ' - News Tracker';
+
+        // Meta
+        const dateStr = (article.published_at || original.published_at)
+            ? new Date(article.published_at || original.published_at).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' })
+            : '';
+        document.getElementById('articleDate').textContent = dateStr;
+        document.getElementById('articleCategory').textContent = rewritten.category || 'News';
+        document.getElementById('articleWordCount').textContent = rewritten.word_count ? `${rewritten.word_count} parole` : '';
+
+        // Title & Lead
+        document.getElementById('articleTitle').textContent = rewritten.headline || original.title || 'Nessun titolo';
+        const lead = rewritten.lead || '';
+        const leadEl = document.getElementById('articleLead');
+        if (lead) {
+            leadEl.textContent = lead;
         } else {
-            loadArticle(articleUrl);
+            leadEl.style.display = 'none';
         }
 
-        async function loadArticle(url) {
-            try {
-                // Cerca articolo nell'API
-                const response = await fetch(`/api/article-by-url?url=${encodeURIComponent(url)}`);
-                
-                if (!response.ok) {
-                    throw new Error('Articolo non trovato');
-                }
-
-                const article = await response.json();
-                displayArticle(article);
-            } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('errorMessage').textContent = error.message;
-            }
+        // Image
+        const images = article.images || original.images;
+        if (images && images.length > 0) {
+            const heroDiv = document.getElementById('articleHero');
+            const img = document.getElementById('articleImage');
+            img.src = images[0];
+            img.onerror = () => heroDiv.style.display = 'none';
+            heroDiv.style.display = 'block';
         }
 
-        function displayArticle(article) {
-            const rewritten = article.rewritten || {};
-            const original = article.original || article;
+        // Body
+        const bodyText = rewritten.body_markdown || '';
+        document.getElementById('articleBody').innerHTML = convertMarkdownToHtml(bodyText);
 
-            // Header
-            document.getElementById('articleSource').textContent = article.source_name || 'Fonte sconosciuta';
-            document.getElementById('articleTitle').textContent = rewritten.headline || article.title || 'Nessun titolo';
-            document.getElementById('articleDate').textContent = article.published_at ? 
-                new Date(article.published_at).toLocaleDateString('it-IT', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                }) : 'Data sconosciuta';
-            document.getElementById('articleCategory').textContent = rewritten.category || 'news';
-            document.getElementById('articleWordCount').textContent = rewritten.word_count ? 
-                `${rewritten.word_count} parole` : '';
+        // Tags
+        const tagsEl = document.getElementById('articleTags');
+        if (rewritten.tags && rewritten.tags.length > 0) {
+            tagsEl.innerHTML = rewritten.tags.map(t => `<span class="tag">${t}</span>`).join('');
+            tagsEl.style.display = 'flex';
+        }
 
-            // Immagine
-            if (article.images && article.images.length > 0) {
-                const img = document.getElementById('articleImage');
-                img.src = article.images[0];
-                img.style.display = 'block';
-                img.onerror = () => img.style.display = 'none';
-            }
+        // Quality Gate
+        if (qg && qg.similarity_score != null) {
+            const panel = document.getElementById('qualityPanel');
+            const score = qg.similarity_score;
+            const pct = (score * 100).toFixed(1);
+            const color = score < 0.7 ? 'var(--success)' : score < 0.85 ? 'var(--warning)' : 'var(--error)';
+            const riskColors = { low: 'var(--success)', medium: 'var(--warning)', high: 'var(--error)' };
+            const riskColor = riskColors[qg.risk_level] || 'var(--ink-muted)';
 
-            // Lead
-            document.getElementById('articleLead').textContent = rewritten.lead || '';
+            let html = `
+                <div class="quality-meter">
+                    <span class="quality-meter-label">Similarita</span>
+                    <div class="quality-meter-track"><div class="quality-meter-fill" style="width:${pct}%;background:${color}"></div></div>
+                    <span class="quality-meter-value" style="color:${color}">${pct}%</span>
+                </div>`;
 
-            // Body (converte markdown a HTML semplice)
-            const bodyText = rewritten.body_markdown || '';
-            const bodyHtml = convertMarkdownToHtml(bodyText);
-            document.getElementById('articleBody').innerHTML = bodyHtml;
-
-            // Tags
-            const tagsContainer = document.getElementById('articleTags');
-            if (rewritten.tags && rewritten.tags.length > 0) {
-                tagsContainer.innerHTML = rewritten.tags.map(tag => 
-                    `<span class="tag">${tag}</span>`
-                ).join('');
-            } else {
-                tagsContainer.style.display = 'none';
+            if (qg.risk_level) {
+                html += `
+                    <div class="quality-meter">
+                        <span class="quality-meter-label">Rischio</span>
+                        <div style="flex:1;font-size:0.875rem;font-weight:600;color:${riskColor};text-transform:capitalize;">${qg.risk_level}</div>
+                    </div>`;
             }
 
-            // Originale
-            document.getElementById('originalTitle').textContent = original.title || '';
-            document.getElementById('originalText').textContent = original.text ? 
-                original.text.substring(0, 1000) + (original.text.length > 1000 ? '...' : '') : '';
-            document.getElementById('originalLink').href = article.url || '#';
-            document.getElementById('originalLink').textContent = `→ Leggi articolo originale su ${article.source_name || 'fonte originale'}`;
+            if (qg.issues && qg.issues.length > 0) {
+                html += `<div class="quality-issues"><strong>Problemi:</strong> ${qg.issues.join(', ')}</div>`;
+            }
 
-            // Mostra contenuto
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('articleContent').style.display = 'block';
+            document.getElementById('qualityContent').innerHTML = html;
+            panel.style.display = 'block';
         }
 
-        function convertMarkdownToHtml(markdown) {
-            if (!markdown) return '';
-            
-            let html = markdown;
-            
-            // Headers
-            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-            
-            // Bold
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            
-            // Italic
-            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            
-            // Links
-            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-            
-            // Paragraphs
-            html = html.split('\n\n').map(p => {
-                p = p.trim();
-                if (p && !p.startsWith('<h') && !p.startsWith('<ul') && !p.startsWith('<ol')) {
-                    return `<p>${p}</p>`;
-                }
-                return p;
-            }).join('\n');
-            
-            // Lists
-            html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
-            html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-            
-            return html;
-        }
+        // Original
+        document.getElementById('originalTitle').textContent = original.title || '';
+        const origText = original.text || '';
+        document.getElementById('originalText').textContent = origText.substring(0, 1500) + (origText.length > 1500 ? '...' : '');
+        document.getElementById('originalLink').href = article.url || original.url || '#';
+        document.getElementById('originalLink').textContent = `Leggi l'articolo originale su ${sourceName}`;
 
-        function toggleOriginal() {
-            const content = document.getElementById('originalContent');
-            content.classList.toggle('show');
-        }
+        // Show
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('articleContent').style.display = 'block';
+    }
+
+    /* ─── Markdown to HTML ─── */
+    function convertMarkdownToHtml(markdown) {
+        if (!markdown) return '';
+        let html = markdown;
+
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+        // Bold
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // Italic
+        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+        // Links
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+        // Blockquote
+        html = html.replace(/^> (.*$)/gim, '<blockquote><p>$1</p></blockquote>');
+
+        // Paragraphs
+        html = html.split('\n\n').map(p => {
+            p = p.trim();
+            if (p && !p.startsWith('<h') && !p.startsWith('<ul') && !p.startsWith('<ol') && !p.startsWith('<blockquote')) {
+                return `<p>${p}</p>`;
+            }
+            return p;
+        }).join('\n');
+
+        // Lists
+        html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+        return html;
+    }
     </script>
 </body>
 </html>

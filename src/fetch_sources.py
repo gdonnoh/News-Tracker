@@ -1,350 +1,301 @@
 """
-Modulo per raccolta URL da feed RSS e whitelist domini.
-Gestisce rate limiting, timeout e persistenza URL già processati.
+RSS feed fetcher with rate limiting, deduplication tracking, and domain whitelisting.
 """
 
-import time
 import hashlib
-import sqlite3
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
+
 import feedparser
 import requests
 from dateutil import parser as date_parser
+
 from src.logger import get_logger
+from src.utils import db_connection
 
 logger = get_logger()
 
 
 class SourceFetcher:
-    """Gestisce la raccolta di URL da feed RSS e whitelist."""
-    
+    """Collects article URLs from RSS feeds with deduplication and rate limiting."""
+
     def __init__(
         self,
         sources_config: Dict,
         dedupe_db_path: str = "./data/dedupe.db",
         rate_limit_delay: float = 6.0,
-        timeout: int = 30
+        timeout: int = 30,
     ):
         self.sources_config = sources_config
         self.dedupe_db_path = Path(dedupe_db_path)
         self.dedupe_db_path.parent.mkdir(parents=True, exist_ok=True)
         self.rate_limit_delay = rate_limit_delay
         self.timeout = timeout
+
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (compatible; NewsPipeline/1.0; +https://example.com/bot)"
         })
-        
-        # Inizializza DB per tracking URL processati
-        self._init_db()
-        
-        # Callback per aggiornare stato (se disponibile)
+
+        self._processed_cache: Optional[set] = None
         self.status_callback = None
-    
+
+        self._init_db()
+
     def set_status_callback(self, callback):
-        """Imposta callback per aggiornare stato."""
         self.status_callback = callback
-    
-    def _update_status_if_available(self, step, message):
-        """Aggiorna stato se callback disponibile."""
+
+    def _update_status(self, step: str, message: str):
         if self.status_callback:
             try:
                 self.status_callback(step, message)
-            except:
-                pass
-    
+            except Exception as e:
+                logger.log_warning(f"Status callback error: {e}")
+
+    # ------------------------------------------------------------------
+    # Database helpers
+    # ------------------------------------------------------------------
+
     def _init_db(self):
-        """Inizializza database SQLite per tracking URL."""
-        conn = sqlite3.connect(str(self.dedupe_db_path))
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processed_urls (
-                url_hash TEXT PRIMARY KEY,
-                url TEXT UNIQUE NOT NULL,
-                first_seen_at TEXT NOT NULL,
-                last_seen_at TEXT NOT NULL,
-                processed BOOLEAN DEFAULT 0
-            )
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_url ON processed_urls(url)
-        """)
-        conn.commit()
-        conn.close()
-    
+        with db_connection(self.dedupe_db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS processed_urls (
+                    url_hash TEXT PRIMARY KEY,
+                    url TEXT UNIQUE NOT NULL,
+                    first_seen_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    processed BOOLEAN DEFAULT 0
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_url ON processed_urls(url)")
+
+    def _load_processed_cache(self):
+        if self._processed_cache is not None:
+            return
+        try:
+            with db_connection(self.dedupe_db_path) as conn:
+                rows = conn.execute(
+                    "SELECT url_hash FROM processed_urls WHERE processed = 1"
+                ).fetchall()
+                self._processed_cache = {row[0] for row in rows}
+        except Exception as e:
+            logger.log_warning(f"Could not load processed URL cache: {e}")
+            self._processed_cache = set()
+
     def _is_url_processed(self, url: str) -> bool:
-        """Verifica se un URL è già stato processato."""
         url_hash = hashlib.sha256(url.encode()).hexdigest()
-        conn = sqlite3.connect(str(self.dedupe_db_path))
-        cursor = conn.cursor()
-        cursor.execute("SELECT processed FROM processed_urls WHERE url_hash = ?", (url_hash,))
-        result = cursor.fetchone()
-        conn.close()
+        if self._processed_cache is not None and url_hash in self._processed_cache:
+            return True
+        with db_connection(self.dedupe_db_path) as conn:
+            result = conn.execute(
+                "SELECT processed FROM processed_urls WHERE url_hash = ?", (url_hash,)
+            ).fetchone()
         return result is not None and result[0] == 1
-    
+
     def _mark_url_seen(self, url: str, processed: bool = False):
-        """Marca un URL come visto (non necessariamente processato)."""
         url_hash = hashlib.sha256(url.encode()).hexdigest()
         now = datetime.now().isoformat()
-        conn = sqlite3.connect(str(self.dedupe_db_path))
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO processed_urls 
-            (url_hash, url, first_seen_at, last_seen_at, processed)
-            VALUES (?, ?, 
-                COALESCE((SELECT first_seen_at FROM processed_urls WHERE url_hash = ?), ?),
-                ?, ?)
-        """, (url_hash, url, url_hash, now, now, 1 if processed else 0))
-        conn.commit()
-        conn.close()
-    
+        with db_connection(self.dedupe_db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO processed_urls
+                (url_hash, url, first_seen_at, last_seen_at, processed)
+                VALUES (?, ?,
+                    COALESCE((SELECT first_seen_at FROM processed_urls WHERE url_hash = ?), ?),
+                    ?, ?)
+            """, (url_hash, url, url_hash, now, now, 1 if processed else 0))
+
+        if processed:
+            if self._processed_cache is None:
+                self._processed_cache = set()
+            self._processed_cache.add(url_hash)
+
+    # ------------------------------------------------------------------
+    # Domain whitelist
+    # ------------------------------------------------------------------
+
     def _is_domain_allowed(self, url: str) -> bool:
-        """Verifica se il dominio dell'URL è nella whitelist."""
-        whitelist_config = self.sources_config.get("whitelist_domains", {})
-        
-        if not whitelist_config.get("enabled", False):
-            return True  # Se whitelist disabilitata, accetta tutto
-        
-        allowed_domains = whitelist_config.get("domains", [])
+        whitelist = self.sources_config.get("whitelist_domains", {})
+        if not whitelist.get("enabled", False):
+            return True
+
+        allowed_domains = whitelist.get("domains", [])
         if not allowed_domains:
             return True
-        
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-        
-        # Rimuovi www. per confronto
-        if domain.startswith("www."):
-            domain = domain[4:]
-        
-        # Controlla dominio esatto o sottodomini
-        for allowed in allowed_domains:
-            allowed = allowed.lower().replace("www.", "")
-            if domain == allowed or domain.endswith(f".{allowed}"):
-                return True
-        
-        return False
-    
+
+        domain = urlparse(url).netloc.lower().removeprefix("www.")
+
+        return any(
+            domain == d.lower().removeprefix("www.") or domain.endswith(f".{d.lower().removeprefix('www.')}")
+            for d in allowed_domains
+        )
+
+    # ------------------------------------------------------------------
+    # Date helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_entry_date(entry) -> tuple[Optional[str], Optional[datetime]]:
+        """Extract published_at string and datetime from a feedparser entry."""
+        if hasattr(entry, "published_parsed") and entry.published_parsed:
+            dt = datetime(*entry.published_parsed[:6])
+            return dt.isoformat(), dt
+
+        if hasattr(entry, "published") and entry.published:
+            try:
+                dt = date_parser.parse(entry.published)
+                return dt.isoformat(), dt
+            except (ValueError, TypeError):
+                return entry.published, None
+
+        return None, None
+
+    @staticmethod
+    def _is_too_old(dt: Optional[datetime], max_age_days: int = 2) -> bool:
+        if dt is None:
+            return False
+        return dt < datetime.now() - timedelta(days=max_age_days)
+
+    # ------------------------------------------------------------------
+    # RSS fetching
+    # ------------------------------------------------------------------
+
     def fetch_rss_feeds(self) -> List[Dict]:
-        """
-        Scarica e parsa tutti i feed RSS abilitati.
-        
-        Returns:
-            Lista di candidati: [{"url": "...", "source": "...", "published_at": "...", "title": "..."}]
-        """
-        candidates = []
+        candidates: List[Dict] = []
+        self._load_processed_cache()
         feeds = self.sources_config.get("rss_feeds", [])
-        
+
         for feed_config in feeds:
             if not feed_config.get("enabled", True):
                 continue
-            
+
             feed_url = feed_config["url"]
             source_name = feed_config.get("name", feed_url)
-            
+
             try:
                 logger.log_info(f"Fetching RSS feed: {source_name}")
-                self._update_status_if_available("fetching", f"Scaricando feed: {source_name}")
-                
-                # Rate limiting
+                self._update_status("fetching", f"Scaricando feed: {source_name}")
+
                 time.sleep(self.rate_limit_delay)
-                
-                # Download feed
+
                 response = self.session.get(feed_url, timeout=self.timeout)
                 response.raise_for_status()
-                
-                # Parse feed
+
                 feed = feedparser.parse(response.content)
-                
                 entry_count = len(feed.entries)
-                logger.log_info(f"Trovati {entry_count} articoli nel feed RSS '{source_name}'")
-                self._update_status_if_available("fetching", f"✅ Trovati {entry_count} articoli nel feed '{source_name}'")
-                
-                # Contatori per statistiche
-                skipped_whitelist = 0
-                skipped_processed = 0
-                skipped_old = 0
-                added = 0
-                
+                logger.log_info(f"Found {entry_count} articles in feed '{source_name}'")
+                self._update_status("fetching", f"Found {entry_count} articles in '{source_name}'")
+
+                skipped_whitelist = skipped_processed = skipped_old = added = 0
+
                 for entry in feed.entries:
                     url = entry.get("link", "")
                     if not url:
                         continue
-                    
-                    # Verifica whitelist
+
                     if not self._is_domain_allowed(url):
                         skipped_whitelist += 1
                         continue
-                    
-                    # Verifica se già processato
+
                     if self._is_url_processed(url):
                         skipped_processed += 1
                         continue
-                    
-                    # Estrai metadata
-                    published_at = None
-                    published_datetime = None
-                    if hasattr(entry, "published_parsed") and entry.published_parsed:
-                        published_datetime = datetime(*entry.published_parsed[:6])
-                        published_at = published_datetime.isoformat()
-                    elif hasattr(entry, "published"):
-                        published_at = entry.published
-                        try:
-                            # Prova a parsare la data
-                            published_datetime = date_parser.parse(published_at)
-                        except (ValueError, TypeError):
-                            pass
-                    
-                    # Filtra articoli più vecchi di 2 giorni
-                    if published_datetime:
-                        two_days_ago = datetime.now() - timedelta(days=2)
-                        if published_datetime < two_days_ago:
-                            skipped_old += 1
-                            continue
-                    elif published_at:
-                        # Se abbiamo solo la stringa, prova a parsarla
-                        try:
-                            published_datetime = date_parser.parse(published_at)
-                            two_days_ago = datetime.now() - timedelta(days=2)
-                            if published_datetime < two_days_ago:
-                                skipped_old += 1
-                                continue
-                        except (ValueError, TypeError):
-                            # Se non riusciamo a parsare, accettiamo l'articolo (meglio includere che escludere)
-                            pass
-                    
-                    candidate = {
+
+                    published_at, published_dt = self._parse_entry_date(entry)
+
+                    if self._is_too_old(published_dt):
+                        skipped_old += 1
+                        continue
+
+                    candidates.append({
                         "url": url,
                         "source": source_name,
                         "published_at": published_at,
                         "title": entry.get("title", ""),
-                        "description": entry.get("description", "")
-                    }
-                    
-                    candidates.append(candidate)
+                        "description": entry.get("description", ""),
+                    })
                     added += 1
                     self._mark_url_seen(url, processed=False)
-                
-                # Log statistiche finali per questo feed
+
                 logger.log_info(
-                    f"Feed '{source_name}': {added} candidati aggiunti "
-                    f"(scartati: {skipped_processed} già processati, {skipped_old} troppo vecchi, {skipped_whitelist} fuori whitelist)"
+                    f"Feed '{source_name}': {added} candidates added "
+                    f"(skipped: {skipped_processed} processed, {skipped_old} too old, {skipped_whitelist} whitelist)"
                 )
-                
+
             except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 404:
-                    error_msg = f"⚠️ Feed non disponibile: {source_name} (404)"
-                    logger.log_warning(error_msg)
-                    self._update_status_if_available("fetching", error_msg)
+                status = e.response.status_code if e.response is not None else "?"
+                if status == 404:
+                    msg = f"Feed unavailable: {source_name} (404)"
+                    logger.log_warning(msg)
                 else:
-                    error_msg = f"❌ Errore feed {source_name}: {e.response.status_code}"
-                    logger.log_error(error_msg)
-                    self._update_status_if_available("fetching", error_msg)
-                continue
+                    msg = f"Feed error {source_name}: HTTP {status}"
+                    logger.log_error(msg)
+                self._update_status("fetching", msg)
             except Exception as e:
-                error_msg = f"❌ Errore nel fetch feed {source_name}: {str(e)[:100]}"
-                logger.log_error(f"Errore nel fetch feed {source_name}: {e}", exc_info=True)
-                self._update_status_if_available("fetching", error_msg)
-                continue
-        
+                msg = f"Feed fetch error {source_name}: {str(e)[:100]}"
+                logger.log_error(f"Feed fetch error {source_name}: {e}", exc_info=True)
+                self._update_status("fetching", msg)
+
         return candidates
-    
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def fetch_all(self, limit: Optional[int] = None) -> List[Dict]:
         """
-        Raccoglie tutti i candidati da tutte le fonti.
-        
-        Args:
-            limit: Limite massimo di candidati da restituire
-        
-        Returns:
-            Lista di candidati ordinati per data (più recenti prima), distribuiti tra le fonti
+        Collect candidates from all sources, sorted by date (newest first).
+        When *limit* is set, articles are distributed round-robin across sources.
         """
-        all_candidates = []
-        
-        # Fetch RSS feeds
-        rss_candidates = self.fetch_rss_feeds()
-        all_candidates.extend(rss_candidates)
-        
-        # Qui si potrebbero aggiungere altre fonti (whitelist URL diretti, etc.)
-        
-        # Se c'è un limite, distribuisci gli articoli tra le fonti
-        if limit and limit > 0:
-            # Raggruppa per fonte
-            by_source = {}
-            for candidate in all_candidates:
-                source = candidate.get("source", "Unknown")
-                if source not in by_source:
-                    by_source[source] = []
-                by_source[source].append(candidate)
-            
-            # Ordina ogni gruppo per data (più recenti prima)
-            for source in by_source:
-                by_source[source].sort(
-                    key=lambda x: x.get("published_at") or "",
-                    reverse=True
-                )
-            
-            # Prendi articoli in modo round-robin dalle fonti
-            distributed = []
-            sources_list = list(by_source.keys())
-            max_per_source = (limit // len(sources_list)) + 1 if sources_list else limit
-            
-            for i in range(limit):
-                source_idx = i % len(sources_list) if sources_list else 0
-                source = sources_list[source_idx]
-                
-                if by_source[source] and len([c for c in distributed if c.get("source") == source]) < max_per_source:
-                    distributed.append(by_source[source].pop(0))
-                
-                # Se una fonte è finita, rimuovila
-                if not by_source[source]:
-                    sources_list.remove(source)
-                    if not sources_list:
-                        break
-            
-            # Ordina risultato finale per data
-            distributed.sort(
-                key=lambda x: x.get("published_at") or "",
-                reverse=True
-            )
-            
-            all_candidates = distributed
-        else:
-            # Senza limite, ordina tutti per data
-            all_candidates.sort(
-                key=lambda x: x.get("published_at") or "",
-                reverse=True
-            )
-        
-        # Filtra ulteriormente per sicurezza (in caso alcuni siano sfuggiti)
-        filtered_candidates = []
-        two_days_ago = datetime.now() - timedelta(days=2)
+        all_candidates = self.fetch_rss_feeds()
+
+        # Final age filter (safety net)
+        cutoff = datetime.now() - timedelta(days=2)
+        filtered: List[Dict] = []
         skipped_old = 0
-        
-        for candidate in all_candidates:
-            published_at = candidate.get("published_at")
-            if published_at:
+
+        for c in all_candidates:
+            pub = c.get("published_at")
+            if pub:
                 try:
-                    if isinstance(published_at, str):
-                        published_datetime = date_parser.parse(published_at)
-                    elif isinstance(published_at, datetime):
-                        published_datetime = published_at
-                    else:
-                        published_datetime = None
-                    
-                    if published_datetime and published_datetime < two_days_ago:
+                    dt = date_parser.parse(pub) if isinstance(pub, str) else pub
+                    if isinstance(dt, datetime) and dt < cutoff:
                         skipped_old += 1
                         continue
                 except (ValueError, TypeError):
-                    # Se non riusciamo a parsare, includiamo l'articolo
                     pass
-            
-            filtered_candidates.append(candidate)
-        
-        if skipped_old > 0:
-            logger.log_info(f"Filtrati {skipped_old} articoli più vecchi di 2 giorni")
-        
-        logger.log_info(f"Totale candidati raccolti: {len(filtered_candidates)}")
-        return filtered_candidates
+            filtered.append(c)
+
+        if skipped_old:
+            logger.log_info(f"Filtered {skipped_old} articles older than 2 days")
+
+        # Apply limit with round-robin distribution across sources
+        if limit and limit > 0 and len(filtered) > limit:
+            by_source: Dict[str, List[Dict]] = {}
+            for c in filtered:
+                by_source.setdefault(c.get("source", "Unknown"), []).append(c)
+
+            for articles in by_source.values():
+                articles.sort(key=lambda x: x.get("published_at") or "", reverse=True)
+
+            distributed: List[Dict] = []
+            sources = list(by_source.keys())
+            max_per_source = (limit // len(sources)) + 1 if sources else limit
+
+            for i in range(limit):
+                if not sources:
+                    break
+                src = sources[i % len(sources)]
+                taken = sum(1 for d in distributed if d.get("source") == src)
+                if by_source[src] and taken < max_per_source:
+                    distributed.append(by_source[src].pop(0))
+                if not by_source[src]:
+                    sources.remove(src)
+
+            filtered = distributed
+
+        filtered.sort(key=lambda x: x.get("published_at") or "", reverse=True)
+        logger.log_info(f"Total candidates collected: {len(filtered)}")
+        return filtered

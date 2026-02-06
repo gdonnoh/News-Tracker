@@ -1,397 +1,472 @@
 #!/usr/bin/env python3
 """
-Server Flask semplice per servire il frontend mock.
-Serve i dati JSON dalla pipeline senza bisogno di WordPress.
+Flask server for the News Tracker frontend.
+Serves the dashboard UI and provides a REST API for the pipeline.
 """
 
-import os
-import json
 import glob
+import json
+import os
+import sys
+import time
+from datetime import datetime
 from pathlib import Path
-from flask import Flask, jsonify, send_from_directory
+
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-app = Flask(__name__, static_folder='.')
+# Ensure the project root is importable
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
+
+from src.utils import (
+    db_connection,
+    get_cache_dir,
+    get_data_dir,
+    get_default_dedupe_db,
+    get_logs_dir,
+    get_status_file,
+    is_vercel,
+    normalize_date,
+    url_to_hash,
+)
+
+# ---------------------------------------------------------------------------
+# App setup
+# ---------------------------------------------------------------------------
+
+app = Flask(__name__, static_folder=".")
 CORS(app)
 
-# Path handling per Vercel (serverless) e locale
-BASE_DIR = Path(__file__).parent.parent
+CACHE_DIR = get_cache_dir()
+LOGS_DIR = get_logs_dir()
+DEDUPE_DB = get_default_dedupe_db()
 
-# Su Vercel, usa /tmp per file scrivibili (unico path scrivibile)
-# In locale, usa la directory data normale
-# Vercel imposta VERCEL=1 come variabile ambiente
-IS_VERCEL = (
-    os.getenv("VERCEL") == "1" or 
-    os.getenv("VERCEL_ENV") is not None or
-    "/var/task" in str(Path(__file__).absolute())  # Fallback: controlla path Vercel
-)
-if IS_VERCEL:
-    # Vercel environment - usa /tmp (unico path scrivibile)
-    CACHE_DIR = Path("/tmp") / "cache"
-    LOGS_DIR = Path("/tmp") / "logs"
-    DEDUPE_DB = Path("/tmp") / "dedupe.db"
-else:
-    # Local environment
-    CACHE_DIR = BASE_DIR / "data" / "cache"
-    LOGS_DIR = BASE_DIR / "data" / "logs"
-    DEDUPE_DB = BASE_DIR / "data" / "dedupe.db"
+# ---------------------------------------------------------------------------
+# Database initialisation (lazy, thread-safe via flag)
+# ---------------------------------------------------------------------------
 
-# Crea directory se non esistono
-try:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    # Assicurati che la directory del database esista
-    DEDUPE_DB.parent.mkdir(parents=True, exist_ok=True)
-except Exception as e:
-    print(f"Warning: Errore creazione directory: {e}")
-
-# Inizializza tabella per articoli eliminati (lazy initialization - NO chiamata durante import!)
 _db_initialized = False
 
-def init_deleted_articles_table():
-    """Inizializza tabella per articoli eliminati nel database (lazy)."""
+
+def _ensure_db():
+    """Create application-specific tables if they don't exist yet."""
     global _db_initialized
     if _db_initialized:
         return
-    
     try:
-        import sqlite3
-        # Assicurati che la directory esista (con retry per Vercel)
-        try:
-            DEDUPE_DB.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as dir_err:
-            print(f"Warning: Errore creazione directory database: {dir_err}")
-            # Su Vercel, /tmp dovrebbe già esistere, ma proviamo comunque
-            if IS_VERCEL:
-                # Su Vercel, /tmp esiste sempre, quindi il problema potrebbe essere altro
-                pass
-        
-        # Crea database vuoto se non esiste
-        # Usa timeout per evitare lock su Vercel
-        conn = sqlite3.connect(str(DEDUPE_DB), timeout=10.0)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS deleted_articles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT UNIQUE NOT NULL,
-                original_data TEXT NOT NULL,
-                rewritten_data TEXT,
-                quality_gate_data TEXT,
-                source_name TEXT,
-                deleted_at TEXT NOT NULL,
-                deleted_reason TEXT
-            )
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_deleted_url ON deleted_articles(url)
-        """)
-        conn.commit()
-        conn.close()
+        with db_connection(DEDUPE_DB) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS deleted_articles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT UNIQUE NOT NULL,
+                    original_data TEXT NOT NULL,
+                    rewritten_data TEXT,
+                    quality_gate_data TEXT,
+                    source_name TEXT,
+                    deleted_at TEXT NOT NULL,
+                    deleted_reason TEXT
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deleted_url ON deleted_articles(url)")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS candidates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT UNIQUE NOT NULL,
+                    title TEXT,
+                    description TEXT,
+                    published_at TEXT,
+                    source TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_candidates_url ON candidates(url)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_candidates_source ON candidates(source)")
         _db_initialized = True
     except Exception as e:
-        # Log errore ma non bloccare startup
-        print(f"Warning: Errore inizializzazione database: {e}")
-        # Non bloccare l'applicazione, il database verrà inizializzato quando necessario
+        print(f"Warning: DB init error: {e}")
 
 
-@app.route('/')
+def _error_response(message: str, status_code: int = 500):
+    """Return a JSON error without leaking tracebacks to the client."""
+    return jsonify({"error": message}), status_code
+
+
+# ---------------------------------------------------------------------------
+# Static pages
+# ---------------------------------------------------------------------------
+
+@app.route("/")
 def index():
-    """Serve la pagina HTML principale."""
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(".", "index.html")
 
 
-@app.route('/api/articles')
+@app.route("/article.html")
+def article_page():
+    return send_from_directory(".", "article.html")
+
+
+# ---------------------------------------------------------------------------
+# Articles API
+# ---------------------------------------------------------------------------
+
+@app.route("/api/articles")
 def get_articles():
-    """Restituisce lista articoli estratti e riscritti."""
+    """Return all extracted + rewritten articles."""
     articles = []
-    
-    # Prima: leggi file riscritti (contengono sia originale che riscritto)
-    rewritten_files = glob.glob(str(CACHE_DIR / "rewritten_*.json"))
-    processed_urls = set()
-    
-    for json_file in sorted(rewritten_files, reverse=True):  # Più recenti prima
+    processed_urls: set = set()
+
+    # Rewritten files first (contain both original + rewritten)
+    for json_file in sorted(glob.glob(str(CACHE_DIR / "rewritten_*.json")), reverse=True):
         try:
-            with open(json_file, 'r', encoding='utf-8') as f:
+            with open(json_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # Combina dati originali e riscritti
-                article = {
-                    **data.get("original", {}),
-                    "rewritten": data.get("rewritten", {}),
-                    "has_rewritten": True,
-                    "processed_at": data.get("processed_at"),
-                    "quality_gate": data.get("quality_gate", {})  # Aggiungi info quality gate
-                }
-                articles.append(article)
-                processed_urls.add(data.get("url", ""))
+            article = {
+                **data.get("original", {}),
+                "rewritten": data.get("rewritten", {}),
+                "has_rewritten": True,
+                "processed_at": data.get("processed_at"),
+                "quality_gate": data.get("quality_gate", {}),
+            }
+            articles.append(article)
+            processed_urls.add(data.get("url", ""))
         except Exception as e:
-            print(f"Errore lettura {json_file}: {e}")
-            continue
-    
-    # Poi: aggiungi articoli solo estratti (non ancora riscritti)
-    extracted_files = glob.glob(str(CACHE_DIR / "extracted_*.json"))
-    
-    for json_file in sorted(extracted_files, reverse=True):
+            print(f"Error reading {json_file}: {e}")
+
+    # Then extracted-only (not yet rewritten)
+    for json_file in sorted(glob.glob(str(CACHE_DIR / "extracted_*.json")), reverse=True):
         try:
-            with open(json_file, 'r', encoding='utf-8') as f:
+            with open(json_file, "r", encoding="utf-8") as f:
                 article = json.load(f)
-                # Aggiungi solo se non già presente nei riscritti
-                if article.get("url") not in processed_urls:
-                    article["has_rewritten"] = False
-                    articles.append(article)
+            if article.get("url") not in processed_urls:
+                article["has_rewritten"] = False
+                articles.append(article)
         except Exception as e:
-            print(f"Errore lettura {json_file}: {e}")
-            continue
-    
+            print(f"Error reading {json_file}: {e}")
+
     return jsonify(articles)
 
 
-@app.route('/api/logs')
-def get_logs():
-    """Restituisce log recenti."""
-    logs = []
-    
-    # Leggi audit log
-    audit_files = glob.glob(str(LOGS_DIR / "audit_*.jsonl"))
-    
-    if audit_files:
-        latest_audit = max(audit_files, key=os.path.getmtime)
-        try:
-            with open(latest_audit, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        log_entry = json.loads(line)
-                        logs.append({
-                            "timestamp": log_entry.get("timestamp"),
-                            "level": "info" if log_entry.get("status") == "created" else 
-                                     "warning" if log_entry.get("status") == "skipped" else 
-                                     "error" if log_entry.get("status") == "failed" else "info",
-                            "message": f"[{log_entry.get('operation', 'unknown')}] {log_entry.get('url', '')} - {log_entry.get('status', 'unknown')}"
-                        })
-        except Exception as e:
-            print(f"Errore lettura log: {e}")
-    
-    # Limita a ultimi 100
-    return jsonify(logs[-100:])
-
-
-@app.route('/api/stats')
-def get_stats():
-    """Restituisce statistiche pipeline."""
-    stats = {
-        "total_articles": 0,
-        "extracted": 0,
-        "created": 0,
-        "skipped": 0,
-        "failed": 0
-    }
-    
-    # Conta articoli estratti
-    json_files = glob.glob(str(CACHE_DIR / "extracted_*.json"))
-    stats["total_articles"] = len(json_files)
-    stats["extracted"] = len(json_files)
-    
-    # Leggi report più recente
-    report_files = glob.glob(str(LOGS_DIR / "report_*.json"))
-    
-    if report_files:
-        latest_report = max(report_files, key=os.path.getmtime)
-        try:
-            with open(latest_report, 'r', encoding='utf-8') as f:
-                report = json.load(f)
-                if "stats" in report:
-                    stats.update(report["stats"])
-        except Exception as e:
-            print(f"Errore lettura report: {e}")
-    
-    return jsonify(stats)
-
-
-@app.route('/api/article/<path:filename>')
+@app.route("/api/article/<path:filename>")
 def get_article(filename):
-    """Restituisce un singolo articolo."""
     json_file = CACHE_DIR / filename
-    
     if json_file.exists():
-        with open(json_file, 'r', encoding='utf-8') as f:
+        with open(json_file, "r", encoding="utf-8") as f:
             return jsonify(json.load(f))
-    
-    return jsonify({"error": "Articolo non trovato"}), 404
+    return _error_response("Article not found", 404)
 
 
-@app.route('/api/article-by-url')
+@app.route("/api/article-by-url")
 def get_article_by_url():
-    """Restituisce un articolo per URL."""
-    from flask import request
-    
-    url = request.args.get('url')
+    url = request.args.get("url")
     if not url:
-        return jsonify({"error": "URL non specificato"}), 400
-    
-    # Cerca prima nei file rewritten
-    url_hash = url.replace("://", "_").replace("/", "_").replace("?", "_")[:100]
-    rewritten_file = CACHE_DIR / f"rewritten_{url_hash}.json"
-    
+        return _error_response("URL not specified", 400)
+
+    file_hash = url_to_hash(url)
+    rewritten_file = CACHE_DIR / f"rewritten_{file_hash}.json"
+    extracted_file = CACHE_DIR / f"extracted_{file_hash}.json"
+
     if rewritten_file.exists():
-        with open(rewritten_file, 'r', encoding='utf-8') as f:
+        with open(rewritten_file, "r", encoding="utf-8") as f:
             return jsonify(json.load(f))
-    
-    # Fallback: cerca nei file extracted
-    extracted_file = CACHE_DIR / f"extracted_{url_hash}.json"
-    
+
     if extracted_file.exists():
-        with open(extracted_file, 'r', encoding='utf-8') as f:
+        with open(extracted_file, "r", encoding="utf-8") as f:
             article = json.load(f)
-            return jsonify({
-                "original": article,
-                "rewritten": {},
-                "url": article.get("url"),
-                "source_name": article.get("source_name")
-            })
-    
-    return jsonify({"error": "Articolo non trovato"}), 404
+        return jsonify({
+            "original": article,
+            "rewritten": {},
+            "url": article.get("url"),
+            "source_name": article.get("source_name"),
+        })
+
+    return _error_response("Article not found", 404)
 
 
-@app.route('/article.html')
-def article_page():
-    """Serve la pagina HTML dell'articolo."""
-    return send_from_directory('.', 'article.html')
+# ---------------------------------------------------------------------------
+# Candidates API
+# ---------------------------------------------------------------------------
 
-
-@app.route('/api/extract-articles', methods=['POST'])
-def extract_articles():
-    """Esegue pipeline per estrarre nuovi articoli."""
-    from flask import request
-    
+@app.route("/api/candidates", methods=["GET"])
+def get_candidates():
+    """Return candidates grouped by source. Pass ?refresh=true to re-fetch feeds."""
     try:
-        data = request.get_json() or {}
-        limit = data.get('limit', 10)
-        
-        # Su Vercel, esegui direttamente (no threading per serverless)
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(BASE_DIR))
-        
-        from src.pipeline import NewsPipeline
-        
-        # Configurazione per Vercel
-        config_dir = str(BASE_DIR / "config")
-        pipeline = NewsPipeline(config_dir=config_dir, dry_run=True)
-        
-        # Esegui pipeline (sincrono su Vercel)
-        pipeline.run(limit=limit)
-        
+        _ensure_db()
+        refresh = request.args.get("refresh", "false").lower() == "true"
+
+        if refresh:
+            _refresh_candidates()
+
+        # Read candidates from DB
+        with db_connection(DEDUPE_DB) as conn:
+            rows = conn.execute("""
+                SELECT url, title, description, published_at, source
+                FROM candidates ORDER BY published_at DESC
+            """).fetchall()
+
+        by_source: dict = {}
+        for url, title, description, published_at, source in rows:
+            by_source.setdefault(source, []).append({
+                "url": url,
+                "title": title or "",
+                "description": description or "",
+                "published_at": normalize_date(published_at),
+                "source": source,
+            })
+
+        for articles in by_source.values():
+            articles.sort(key=lambda x: x.get("published_at") or "", reverse=True)
+
+        total = sum(len(v) for v in by_source.values())
         return jsonify({
             "success": True,
-            "message": f"Pipeline completata: {limit} articoli processati",
-            "status": "completed"
+            "total": total,
+            "by_source": by_source,
+            "sources": list(by_source.keys()),
         })
-        
+
     except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"Errore pipeline: {e}\n{error_trace}")
-        return jsonify({
-            "error": str(e),
-            "traceback": error_trace
-        }), 500
+        print(f"Candidates error: {e}")
+        return _error_response(f"Error fetching candidates: {e}")
 
 
-@app.route('/api/pipeline-status')
+def _refresh_candidates():
+    """Fetch all RSS feeds and store candidates in the database."""
+    import yaml
+    from src.fetch_sources import SourceFetcher
+
+    config_path = BASE_DIR / "config" / "sources.yaml"
+    with open(config_path, "r", encoding="utf-8") as f:
+        sources_config = yaml.safe_load(f) or {}
+
+    fetcher = SourceFetcher(
+        sources_config=sources_config,
+        dedupe_db_path=str(DEDUPE_DB),
+        rate_limit_delay=sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0),
+        timeout=sources_config.get("timeouts", {}).get("download", 30),
+    )
+
+    all_candidates = fetcher.fetch_all(limit=None)
+    now = datetime.now().isoformat()
+
+    with db_connection(DEDUPE_DB) as conn:
+        conn.execute("DELETE FROM candidates")
+        for c in all_candidates:
+            conn.execute("""
+                INSERT OR REPLACE INTO candidates
+                (url, title, description, published_at, source, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                c.get("url"),
+                c.get("title", ""),
+                c.get("description", ""),
+                normalize_date(c.get("published_at")),
+                c.get("source", "Unknown"),
+                now, now,
+            ))
+
+
+@app.route("/api/candidates/refresh-stream")
+def refresh_candidates_stream():
+    """SSE endpoint for real-time feed refresh progress."""
+    import feedparser as fp
+    import yaml
+
+    _ensure_db()
+
+    def generate():
+        try:
+            config_path = BASE_DIR / "config" / "sources.yaml"
+            with open(config_path, "r", encoding="utf-8") as f:
+                sources_config = yaml.safe_load(f) or {}
+
+            feeds = sources_config.get("rss_feeds", [])
+            enabled = [f for f in feeds if f.get("enabled", True)]
+            total = len(enabled)
+
+            if total == 0:
+                yield f"data: {json.dumps({'type': 'complete', 'total_candidates': 0})}\n\n"
+                return
+
+            from src.fetch_sources import SourceFetcher
+
+            delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
+            fetcher = SourceFetcher(
+                sources_config=sources_config,
+                dedupe_db_path=str(DEDUPE_DB),
+                rate_limit_delay=delay,
+                timeout=sources_config.get("timeouts", {}).get("download", 30),
+            )
+            fetcher._load_processed_cache()
+
+            all_candidates = []
+
+            for i, feed_cfg in enumerate(enabled):
+                name = feed_cfg.get("name", feed_cfg["url"])
+                pct = round(i / total * 100)
+                yield f"data: {json.dumps({'type': 'progress', 'feed': name, 'index': i, 'total': total, 'pct': pct})}\n\n"
+
+                try:
+                    if i > 0:
+                        time.sleep(delay)
+
+                    resp = fetcher.session.get(feed_cfg["url"], timeout=fetcher.timeout)
+                    resp.raise_for_status()
+
+                    parsed = fp.parse(resp.content)
+                    count = 0
+
+                    for entry in parsed.entries:
+                        url = entry.get("link", "")
+                        if not url or not fetcher._is_domain_allowed(url):
+                            continue
+                        if fetcher._is_url_processed(url):
+                            continue
+
+                        pub_str, pub_dt = fetcher._parse_entry_date(entry)
+                        if fetcher._is_too_old(pub_dt):
+                            continue
+
+                        all_candidates.append({
+                            "url": url,
+                            "source": name,
+                            "published_at": pub_str,
+                            "title": entry.get("title", ""),
+                            "description": entry.get("description", ""),
+                        })
+                        count += 1
+                        fetcher._mark_url_seen(url, processed=False)
+
+                    done_pct = round((i + 1) / total * 100)
+                    yield f"data: {json.dumps({'type': 'feed_done', 'feed': name, 'index': i, 'total': total, 'articles': count, 'pct': done_pct})}\n\n"
+
+                except Exception as e:
+                    done_pct = round((i + 1) / total * 100)
+                    yield f"data: {json.dumps({'type': 'feed_error', 'feed': name, 'index': i, 'total': total, 'error': str(e)[:100], 'pct': done_pct})}\n\n"
+
+            # Store candidates in DB
+            now = datetime.now().isoformat()
+            with db_connection(DEDUPE_DB) as conn:
+                conn.execute("DELETE FROM candidates")
+                for c in all_candidates:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO candidates
+                        (url, title, description, published_at, source, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        c.get("url"),
+                        c.get("title", ""),
+                        c.get("description", ""),
+                        normalize_date(c.get("published_at")),
+                        c.get("source", "Unknown"),
+                        now, now,
+                    ))
+
+            yield f"data: {json.dumps({'type': 'complete', 'total_candidates': len(all_candidates)})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:200]})}\n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pipeline API
+# ---------------------------------------------------------------------------
+
+@app.route("/api/extract-articles", methods=["POST"])
+def extract_articles():
+    """Run the extraction/rewrite pipeline."""
+    try:
+        data = request.get_json() or {}
+        limit = data.get("limit", 10)
+        selected_urls = data.get("urls")
+
+        from src.pipeline import NewsPipeline
+
+        pipeline = NewsPipeline(config_dir=str(BASE_DIR / "config"), dry_run=True)
+
+        if selected_urls:
+            pipeline.run(limit=None, candidate_urls=selected_urls)
+            msg = f"Pipeline completed: {len(selected_urls)} selected articles processed"
+        else:
+            pipeline.run(limit=limit)
+            msg = f"Pipeline completed: up to {limit} articles processed"
+
+        return jsonify({"success": True, "message": msg, "status": "completed"})
+
+    except Exception as e:
+        print(f"Pipeline error: {e}")
+        return _error_response(f"Pipeline error: {e}")
+
+
+@app.route("/api/pipeline-status")
 def get_pipeline_status():
-    """Restituisce stato corrente della pipeline."""
-    status_file = LOGS_DIR / "pipeline_status.json" if IS_VERCEL else BASE_DIR / "data" / "pipeline_status.json"
-    
+    status_file = get_status_file()
     if status_file.exists():
         try:
-            with open(status_file, 'r', encoding='utf-8') as f:
-                status = json.load(f)
-                return jsonify(status)
+            with open(status_file, "r", encoding="utf-8") as f:
+                return jsonify(json.load(f))
         except Exception as e:
-            return jsonify({
-                "status": "error",
-                "error": str(e)
-            }), 500
-    
-    return jsonify({
-        "status": "idle",
-        "message": "Nessuna pipeline in esecuzione"
-    })
+            return _error_response(f"Error reading pipeline status: {e}")
+    return jsonify({"status": "idle", "message": "No pipeline running"})
 
 
-@app.route('/api/rewrite-article', methods=['POST'])
+@app.route("/api/rewrite-article", methods=["POST"])
 def rewrite_article():
-    """Riscrive un singolo articolo."""
-    from flask import request
-    
+    """Extract (if needed) and rewrite a single article."""
     try:
         data = request.get_json()
-        article_url = data.get('url')
-        
+        article_url = data.get("url")
         if not article_url:
-            return jsonify({"error": "URL non specificato"}), 400
-        
-        # Importa moduli pipeline
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        
-        from src.extract_article import ArticleExtractor
-        from src.rewrite import ArticleRewriter
-        import os
+            return _error_response("URL not specified", 400)
+
         from dotenv import load_dotenv
-        import time
-        import json
-        
         load_dotenv()
-        
-        # Estrai articolo se non già estratto
-        extractor = ArticleExtractor(cache_dir=str(BASE_DIR / "data" / "cache"))
-        
-        # Cerca se già estratto
-        url_hash = article_url.replace("://", "_").replace("/", "_").replace("?", "_")[:100]
-        extracted_file = CACHE_DIR / f"extracted_{url_hash}.json"
-        
+
+        from src.extract_article import ArticleExtractor
+        from src.quality_gates import QualityGates
+        from src.rewrite import ArticleRewriter
+
+        file_hash = url_to_hash(article_url)
+        extracted_file = CACHE_DIR / f"extracted_{file_hash}.json"
+
+        # Use cached extraction or extract now
         if extracted_file.exists():
-            with open(extracted_file, 'r', encoding='utf-8') as f:
+            with open(extracted_file, "r", encoding="utf-8") as f:
                 extracted_data = json.load(f)
         else:
-            # Estrai ora
+            extractor = ArticleExtractor(cache_dir=str(CACHE_DIR))
             extracted_data = extractor.extract(article_url)
-        
-        # Controlla contenuto
+
         text = extracted_data.get("text", "").strip()
         title = extracted_data.get("title", "").strip()
-        
+
         if not text or len(text) < 100:
-            return jsonify({
-                "error": "Contenuto vuoto o troppo corto",
-                "details": f"Solo {len(text)} caratteri estratti"
-            }), 400
-        
+            return _error_response(f"Content too short ({len(text)} chars)", 400)
         if not title or len(title) < 10:
-            return jsonify({
-                "error": "Titolo vuoto o troppo corto",
-                "details": f"Solo {len(title)} caratteri"
-            }), 400
-        
-        # Riscrivi
+            return _error_response(f"Title too short ({len(title)} chars)", 400)
+
+        # Rewrite
         llm_provider = os.getenv("LLM_PROVIDER", "openai").lower()
         rewriter = ArticleRewriter(
             provider=llm_provider,
             model=os.getenv("OPENAI_MODEL") or os.getenv("ANTHROPIC_MODEL"),
-            api_key=os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+            api_key=os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"),
         )
-        
         rewritten_data = rewriter.rewrite(extracted_data)
-        
-        # Calcola quality gate
-        from src.quality_gates import QualityGates
+
+        # Quality gate
         quality_gates = QualityGates()
         quality_result = quality_gates.check(extracted_data, rewritten_data)
-        
-        # Salva dati riscritti con quality gate
-        rewritten_file = CACHE_DIR / f"rewritten_{url_hash}.json"
-        combined_data = {
+
+        # Save combined result
+        combined = {
             "original": extracted_data,
             "rewritten": rewritten_data,
             "url": extracted_data.get("url"),
@@ -401,317 +476,255 @@ def rewrite_article():
                 "passed": quality_result.get("ok", False),
                 "similarity_score": quality_result.get("similarity_score", 0.0),
                 "risk_level": quality_result.get("risk_level", "low"),
-                "issues": quality_result.get("issues", [])
-            }
+                "issues": quality_result.get("issues", []),
+            },
         }
-        
+
+        rewritten_file = CACHE_DIR / f"rewritten_{file_hash}.json"
         with open(rewritten_file, "w", encoding="utf-8") as f:
-            json.dump(combined_data, f, indent=2, ensure_ascii=False)
-        
+            json.dump(combined, f, indent=2, ensure_ascii=False)
+
         return jsonify({
             "success": True,
             "rewritten": rewritten_data,
-            "article_url": f"/article.html?url={article_url}"
+            "article_url": f"/article.html?url={article_url}",
         })
-        
+
     except Exception as e:
-        import traceback
-        return jsonify({
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        print(f"Rewrite error: {e}")
+        return _error_response(f"Rewrite error: {e}")
 
 
-@app.route('/api/delete-article', methods=['POST'])
+# ---------------------------------------------------------------------------
+# Delete / Deleted articles
+# ---------------------------------------------------------------------------
+
+@app.route("/api/delete-article", methods=["POST"])
 def delete_article():
-    """Elimina un articolo e lo salva nel database."""
-    from flask import request
-    import sqlite3
-    import json
-    import time
-    
-    # Inizializza database se necessario
-    init_deleted_articles_table()
-    
+    """Soft-delete an article (archive to DB, remove cache files)."""
     try:
+        _ensure_db()
         data = request.get_json()
-        article_url = data.get('url')
-        
+        article_url = data.get("url")
         if not article_url:
-            return jsonify({"error": "URL non specificato"}), 400
-        
-        # Cerca l'articolo nei file rewritten o extracted
-        url_hash = article_url.replace("://", "_").replace("/", "_").replace("?", "_")[:100]
-        rewritten_file = CACHE_DIR / f"rewritten_{url_hash}.json"
-        extracted_file = CACHE_DIR / f"extracted_{url_hash}.json"
-        
+            return _error_response("URL not specified", 400)
+
+        file_hash = url_to_hash(article_url)
+        rewritten_file = CACHE_DIR / f"rewritten_{file_hash}.json"
+        extracted_file = CACHE_DIR / f"extracted_{file_hash}.json"
+
         article_data = None
-        source_name = None
-        
-        # Leggi dati dall'articolo
-        if rewritten_file.exists():
-            with open(rewritten_file, 'r', encoding='utf-8') as f:
-                article_data = json.load(f)
-                source_name = article_data.get('source_name', 'Unknown')
-        elif extracted_file.exists():
-            with open(extracted_file, 'r', encoding='utf-8') as f:
-                article_data = json.load(f)
-                source_name = article_data.get('source_name', 'Unknown')
-        else:
-            return jsonify({"error": "Articolo non trovato"}), 404
-        
-        # Salva nel database prima di eliminare
-        conn = sqlite3.connect(str(DEDUPE_DB))
-        cursor = conn.cursor()
-        
-        original_data = json.dumps(article_data.get('original', article_data), ensure_ascii=False)
-        rewritten_data = json.dumps(article_data.get('rewritten', {}), ensure_ascii=False) if article_data.get('rewritten') else None
-        quality_gate_data = json.dumps(article_data.get('quality_gate', {}), ensure_ascii=False) if article_data.get('quality_gate') else None
-        
-        cursor.execute("""
-            INSERT OR REPLACE INTO deleted_articles 
-            (url, original_data, rewritten_data, quality_gate_data, source_name, deleted_at, deleted_reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            article_url,
-            original_data,
-            rewritten_data,
-            quality_gate_data,
-            source_name,
-            time.strftime("%Y-%m-%dT%H:%M:%S"),
-            data.get('reason', 'Eliminato dall\'utente')
-        ))
-        
-        conn.commit()
-        conn.close()
-        
-        # Elimina file dalla cache
-        if rewritten_file.exists():
-            rewritten_file.unlink()
-        if extracted_file.exists():
-            extracted_file.unlink()
-        
-        return jsonify({
-            "success": True,
-            "message": "Articolo eliminato e salvato nel database"
-        })
-        
+        for path in (rewritten_file, extracted_file):
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    article_data = json.load(f)
+                break
+
+        if article_data is None:
+            return _error_response("Article not found", 404)
+
+        source_name = article_data.get("source_name", "Unknown")
+
+        with db_connection(DEDUPE_DB) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO deleted_articles
+                (url, original_data, rewritten_data, quality_gate_data, source_name, deleted_at, deleted_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                article_url,
+                json.dumps(article_data.get("original", article_data), ensure_ascii=False),
+                json.dumps(article_data.get("rewritten", {}), ensure_ascii=False) if article_data.get("rewritten") else None,
+                json.dumps(article_data.get("quality_gate", {}), ensure_ascii=False) if article_data.get("quality_gate") else None,
+                source_name,
+                time.strftime("%Y-%m-%dT%H:%M:%S"),
+                data.get("reason", "Deleted by user"),
+            ))
+
+        for path in (rewritten_file, extracted_file):
+            if path.exists():
+                path.unlink()
+
+        return jsonify({"success": True, "message": "Article deleted and archived"})
+
     except Exception as e:
-        import traceback
-        return jsonify({
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        print(f"Delete error: {e}")
+        return _error_response(f"Delete error: {e}")
 
 
-@app.route('/api/deleted-articles')
+@app.route("/api/deleted-articles")
 def get_deleted_articles():
-    """Restituisce lista articoli eliminati dal database."""
-    import sqlite3
-    import json
-    
-    # Inizializza database se necessario
-    init_deleted_articles_table()
-    
     try:
-        conn = sqlite3.connect(str(DEDUPE_DB))
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT url, original_data, rewritten_data, quality_gate_data, 
-                   source_name, deleted_at, deleted_reason
-            FROM deleted_articles
-            ORDER BY deleted_at DESC
-            LIMIT 100
-        """)
-        
+        _ensure_db()
+        with db_connection(DEDUPE_DB) as conn:
+            rows = conn.execute("""
+                SELECT url, original_data, rewritten_data, quality_gate_data,
+                       source_name, deleted_at, deleted_reason
+                FROM deleted_articles ORDER BY deleted_at DESC LIMIT 100
+            """).fetchall()
+
         deleted = []
-        for row in cursor.fetchall():
-            url, orig_json, rew_json, qg_json, source, deleted_at, reason = row
-            
-            article = {
-                "url": url,
-                "source_name": source,
-                "deleted_at": deleted_at,
-                "deleted_reason": reason
-            }
-            
-            # Parse JSON data
+        for url, orig_json, rew_json, qg_json, source, deleted_at, reason in rows:
+            article = {"url": url, "source_name": source, "deleted_at": deleted_at, "deleted_reason": reason}
             if orig_json:
                 article["original"] = json.loads(orig_json)
             if rew_json:
                 article["rewritten"] = json.loads(rew_json)
             if qg_json:
                 article["quality_gate"] = json.loads(qg_json)
-            
             deleted.append(article)
-        
-        conn.close()
+
         return jsonify(deleted)
-        
     except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 500
+        return _error_response(f"Error fetching deleted articles: {e}")
 
 
-@app.route('/api/monitor/start', methods=['POST'])
+# ---------------------------------------------------------------------------
+# Logs & Stats
+# ---------------------------------------------------------------------------
+
+@app.route("/api/logs")
+def get_logs():
+    logs = []
+    audit_files = glob.glob(str(LOGS_DIR / "audit_*.jsonl"))
+    if audit_files:
+        latest = max(audit_files, key=os.path.getmtime)
+        try:
+            with open(latest, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        entry = json.loads(line)
+                        status = entry.get("status", "")
+                        level = {"created": "info", "skipped": "warning", "failed": "error"}.get(status, "info")
+                        logs.append({
+                            "timestamp": entry.get("timestamp"),
+                            "level": level,
+                            "message": f"[{entry.get('operation', '?')}] {entry.get('url', '')} - {status}",
+                        })
+        except Exception as e:
+            print(f"Log read error: {e}")
+    return jsonify(logs[-100:])
+
+
+@app.route("/api/stats")
+def get_stats():
+    stats = {"total_articles": 0, "extracted": 0, "created": 0, "skipped": 0, "failed": 0}
+
+    json_files = glob.glob(str(CACHE_DIR / "extracted_*.json"))
+    stats["total_articles"] = len(json_files)
+    stats["extracted"] = len(json_files)
+
+    report_files = glob.glob(str(LOGS_DIR / "report_*.json"))
+    if report_files:
+        latest = max(report_files, key=os.path.getmtime)
+        try:
+            with open(latest, "r", encoding="utf-8") as f:
+                report = json.load(f)
+            if "stats" in report:
+                stats.update(report["stats"])
+        except Exception as e:
+            print(f"Report read error: {e}")
+
+    return jsonify(stats)
+
+
+# ---------------------------------------------------------------------------
+# Monitor API
+# ---------------------------------------------------------------------------
+
+@app.route("/api/monitor/start", methods=["POST"])
 def start_monitor():
-    """Avvia monitoraggio continuo dei feed."""
-    from flask import request
-    
     try:
         data = request.get_json() or {}
-        poll_interval = data.get('poll_interval', 300)  # Default 5 minuti
-        
+        poll_interval = data.get("poll_interval", 300)
+
         from src.monitor import get_monitor
         monitor = get_monitor(poll_interval=poll_interval, dry_run=True)
-        
+
         if monitor.is_running:
-            return jsonify({
-                "success": False,
-                "message": "Monitor già in esecuzione"
-            }), 400
-        
+            return _error_response("Monitor already running", 400)
+
         monitor.start()
-        
-        return jsonify({
-            "success": True,
-            "message": f"Monitor avviato (controllo ogni {poll_interval} secondi)",
-            "poll_interval": poll_interval
-        })
-        
+        return jsonify({"success": True, "message": f"Monitor started (polling every {poll_interval}s)", "poll_interval": poll_interval})
     except Exception as e:
-        import traceback
-        return jsonify({
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return _error_response(f"Monitor start error: {e}")
 
 
-@app.route('/api/monitor/stop', methods=['POST'])
+@app.route("/api/monitor/stop", methods=["POST"])
 def stop_monitor():
-    """Ferma monitoraggio continuo."""
     try:
         from src.monitor import get_monitor
         monitor = get_monitor()
-        
+
         if not monitor.is_running:
-            return jsonify({
-                "success": False,
-                "message": "Monitor non in esecuzione"
-            }), 400
-        
+            return _error_response("Monitor not running", 400)
+
         monitor.stop()
-        
-        return jsonify({
-            "success": True,
-            "message": "Monitor fermato"
-        })
-        
+        return jsonify({"success": True, "message": "Monitor stopped"})
     except Exception as e:
-        import traceback
-        return jsonify({
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return _error_response(f"Monitor stop error: {e}")
 
 
-@app.route('/api/monitor/status')
+@app.route("/api/monitor/status")
 def get_monitor_status():
-    """Restituisce stato del monitoraggio."""
     try:
         from src.monitor import get_monitor
-        monitor = get_monitor()
-        stats = monitor.get_stats()
-        
-        return jsonify(stats)
-        
+        return jsonify(get_monitor().get_stats())
     except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "running": False
-        }), 500
+        return jsonify({"error": str(e), "running": False}), 500
 
 
-@app.route('/api/test-email', methods=['POST'])
+# ---------------------------------------------------------------------------
+# Email test
+# ---------------------------------------------------------------------------
+
+@app.route("/api/test-email", methods=["POST"])
 def test_email():
-    """Test invio email di notifica."""
     try:
         from src.email_notifier import get_email_notifier
-        email_notifier = get_email_notifier()
-        
-        if not email_notifier.enabled:
-            return jsonify({
-                "success": False,
-                "message": "Notifiche email non abilitate. Configura EMAIL_NOTIFICATIONS_ENABLED=true e le credenziali."
-            }), 400
-        
-        # Crea articolo di test
-        test_articles = [{
-            "url": "https://example.com/test-article",
-            "title": "Articolo di Test - Notifica Email",
-            "source": "Test Source"
-        }]
-        
-        success = email_notifier.send_new_articles_notification(test_articles)
-        
-        if success:
-            return jsonify({
-                "success": True,
-                "message": f"Email di test inviata a {email_notifier.recipient}"
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "message": "Errore durante invio email. Controlla i log."
-            }), 500
-        
+        notifier = get_email_notifier()
+
+        if not notifier.enabled:
+            return _error_response("Email notifications not enabled. Set EMAIL_NOTIFICATIONS_ENABLED=true.", 400)
+
+        test_articles = [{"url": "https://example.com/test", "title": "Test Article", "source": "Test"}]
+        if notifier.send_new_articles_notification(test_articles):
+            return jsonify({"success": True, "message": f"Test email sent to {notifier.recipient}"})
+        return _error_response("Email send failed — check logs.")
     except Exception as e:
-        import traceback
-        return jsonify({
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return _error_response(f"Email test error: {e}")
 
 
-# Handler per Vercel serverless
+# ---------------------------------------------------------------------------
+# Vercel handler & local startup
+# ---------------------------------------------------------------------------
+
 def handler(request):
-    """Handler per Vercel serverless functions."""
+    """Vercel serverless handler."""
     return app(request.environ, lambda status, headers: None)
 
-# Export per Vercel
-if __name__ == '__main__':
-    import sys
-    
-    print("🚀 Avvio server frontend mock...")
-    print(f"📁 Cache dir: {CACHE_DIR}")
-    print(f"📁 Logs dir: {LOGS_DIR}")
-    print(f"📁 Database: {DEDUPE_DB}")
-    
-    # Prova porta 5000, se occupata usa 5001
+
+if __name__ == "__main__":
+    print("Starting News Tracker server...")
+    print(f"  Cache:    {CACHE_DIR}")
+    print(f"  Logs:     {LOGS_DIR}")
+    print(f"  Database: {DEDUPE_DB}")
+
     port = 5000
     try:
         import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('127.0.0.1', port))
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", port))
     except OSError:
-        print(f"⚠️  Porta {port} occupata, uso porta 5001")
+        print(f"  Port {port} busy, using 5001")
         port = 5001
-    
-    print(f"\n🌐 Apri http://localhost:{port} nel browser")
-    print("   Premi Ctrl+C per fermare il server\n")
-    
+
+    print(f"\n  Open http://localhost:{port}\n")
+
     try:
-        app.run(debug=True, host='127.0.0.1', port=port)
+        app.run(debug=True, host="127.0.0.1", port=port)
     except PermissionError:
-        print(f"\n❌ Errore: Nessun permesso per usare la porta {port}")
-        print("   Prova con una porta diversa (es: 8080)")
-        print("   Oppure esegui con: sudo python server.py")
+        print(f"  Error: no permission for port {port}. Try a different port or sudo.")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Errore: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"  Error: {e}")
         sys.exit(1)

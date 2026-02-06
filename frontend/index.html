@@ -3,962 +3,1805 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>News Pipeline - Dashboard</title>
+    <title>News Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ─── Design System ─── */
+        :root {
+            --bg: #f8fafc;
+            --bg-subtle: #f1f5f9;
+            --surface: #ffffff;
+            --surface-hover: #fafbfc;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --ink: #0f172a;
+            --ink-secondary: #475569;
+            --ink-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-subtle: #eff6ff;
+            --accent-border: #bfdbfe;
+            --success: #10b981;
+            --success-subtle: #ecfdf5;
+            --success-border: #a7f3d0;
+            --warning: #f59e0b;
+            --warning-subtle: #fffbeb;
+            --warning-border: #fde68a;
+            --error: #ef4444;
+            --error-subtle: #fef2f2;
+            --error-border: #fecaca;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05);
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--ink);
             line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        /* ─── Layout ─── */
+        .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            background: rgba(255,255,255,0.9);
+        }
+
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .topbar-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent) 0%, #1d4ed8 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             color: white;
-            padding: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            font-weight: 700;
+            font-size: 1.1rem;
         }
 
-        .header h1 {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
+        .topbar-title {
+            font-family: "Newsreader", Georgia, serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--ink);
         }
 
-        .header p {
-            opacity: 0.9;
+        .topbar-subtitle {
+            font-size: 0.8rem;
+            color: var(--ink-muted);
+            margin-left: 0.75rem;
+            padding-left: 0.75rem;
+            border-left: 1px solid var(--border);
+        }
+
+        .topbar-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 1.5rem 2rem 3rem;
         }
 
+        /* ─── Buttons ─── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all var(--transition);
+            font-family: inherit;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn-primary:disabled { background: var(--ink-muted); border-color: var(--ink-muted); cursor: not-allowed; opacity: 0.7; }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+        .btn-success:hover { background: #059669; }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .btn-danger:hover { background: #dc2626; }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+            border-color: var(--warning);
+        }
+        .btn-warning:hover { background: #d97706; }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--ink-secondary);
+            border-color: var(--border);
+        }
+        .btn-ghost:hover { background: var(--bg-subtle); color: var(--ink); }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.8125rem;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ─── Stats Grid ─── */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
         }
 
         .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--surface);
+            padding: 1.25rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            transition: all var(--transition);
         }
 
-        .stat-card h3 {
-            font-size: 0.9rem;
-            color: #666;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        .stat-card:hover { box-shadow: var(--shadow-md); }
 
-        .stat-card .value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .stat-card .value.success {
-            color: #10b981;
-        }
-
-        .stat-card .value.warning {
-            color: #f59e0b;
-        }
-
-        .stat-card .value.error {
-            color: #ef4444;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            border-bottom: 2px solid #e5e7eb;
-        }
-
-        .tab {
-            padding: 1rem 1.5rem;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 1rem;
-            color: #666;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-
-        .tab:hover {
-            color: #667eea;
-        }
-
-        .tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
-            font-weight: 600;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .articles-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .article-card {
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .article-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .article-image {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            background: #e5e7eb;
-        }
-
-        .article-content {
-            padding: 1.5rem;
-        }
-
-        .article-source {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
+        .stat-label {
             font-size: 0.75rem;
-            margin-bottom: 0.75rem;
+            font-weight: 500;
+            color: var(--ink-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
         }
 
-        .article-title {
-            font-size: 1.1rem;
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        .stat-value.blue { color: var(--accent); }
+        .stat-value.green { color: var(--success); }
+        .stat-value.amber { color: var(--warning); }
+        .stat-value.red { color: var(--error); }
+
+        /* ─── Tabs ─── */
+        .tabs-bar {
+            display: flex;
+            gap: 0.25rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.25rem;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--ink-muted);
+            transition: all var(--transition);
+            font-family: inherit;
+            position: relative;
+        }
+
+        .tab-btn:hover { color: var(--ink-secondary); }
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            background: var(--bg-subtle);
+            color: var(--ink-muted);
+            border-radius: 999px;
+            font-size: 0.7rem;
             font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: #1f2937;
+            margin-left: 0.5rem;
+        }
+
+        .tab-btn.active .tab-badge {
+            background: var(--accent-subtle);
+            color: var(--accent);
+        }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; animation: fadeIn 0.25s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── Toolbar (action bar inside tabs) ─── */
+        .toolbar {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .toolbar-spacer { flex: 1; }
+
+        .search-input {
+            padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-family: inherit;
+            background: var(--surface);
+            color: var(--ink);
+            width: 280px;
+            transition: all var(--transition);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2394a3b8' viewBox='0 0 24 24'%3E%3Cpath d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' stroke='%2394a3b8' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: 0.65rem center;
+            background-size: 16px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+
+        /* ─── Source Pills ─── */
+        .source-pills {
+            display: flex;
+            gap: 0.375rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.25rem;
+        }
+
+        .source-pill {
+            padding: 0.375rem 0.875rem;
+            border-radius: 999px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--ink-secondary);
+            transition: all var(--transition);
+            font-family: inherit;
+        }
+
+        .source-pill:hover { background: var(--bg-subtle); }
+        .source-pill.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* ─── Candidate List ─── */
+        .candidate-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .candidate-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.875rem;
+            padding: 1rem 1.25rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            transition: all var(--transition);
+        }
+
+        .candidate-row:hover {
+            border-color: var(--accent-border);
+            box-shadow: var(--shadow);
+        }
+
+        .candidate-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+            accent-color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .candidate-body { flex: 1; min-width: 0; }
+
+        .candidate-title {
+            font-weight: 600;
+            font-size: 0.9375rem;
+            color: var(--ink);
+            margin-bottom: 0.25rem;
             line-height: 1.4;
         }
 
-        .article-excerpt {
-            color: #6b7280;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
+        .candidate-desc {
+            font-size: 0.8125rem;
+            color: var(--ink-muted);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .candidate-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--ink-muted);
+        }
+
+        .source-badge {
+            display: inline-flex;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .badge-premium {
+            background: var(--ink);
+            font-size: 0.625rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+        }
+
+        /* ─── Article Cards Grid ─── */
+        .articles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .article-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: all var(--transition);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .article-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .article-card-img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: var(--bg-subtle);
+        }
+
+        .article-card-body {
+            padding: 1.25rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .article-card-badges {
+            display: flex;
+            gap: 0.375rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+        }
+
+        .badge-ai { background: var(--success-subtle); color: #065f46; border: 1px solid var(--success-border); }
+        .badge-extracted { background: var(--accent-subtle); color: #1e40af; border: 1px solid var(--accent-border); }
+        .badge-skipped { background: var(--warning-subtle); color: #92400e; border: 1px solid var(--warning-border); }
+
+        .article-card-title {
+            font-family: "Newsreader", Georgia, serif;
+            font-size: 1.125rem;
+            font-weight: 600;
+            line-height: 1.35;
+            color: var(--ink);
+            margin-bottom: 0.5rem;
+        }
+
+        .article-card-excerpt {
+            font-size: 0.8125rem;
+            color: var(--ink-muted);
             display: -webkit-box;
             -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+            flex: 1;
         }
 
-        .article-meta {
+        /* Similarity meter */
+        .sim-meter {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-subtle);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-light);
+        }
+
+        .sim-meter-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.85rem;
-            color: #9ca3af;
+            margin-bottom: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 500;
         }
 
-        .article-status {
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
+        .sim-meter-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .sim-meter-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.6s ease;
+        }
+
+        .sim-meter-note {
+            font-size: 0.6875rem;
+            color: var(--ink-muted);
+            margin-top: 0.375rem;
+        }
+
+        .article-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-light);
             font-size: 0.75rem;
+            color: var(--ink-muted);
+        }
+
+        .article-card-actions {
+            display: flex;
+            gap: 0.375rem;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+
+        /* ─── Log Viewer ─── */
+        .log-viewer {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 1.25rem;
+            border-radius: var(--radius);
+            font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+            font-size: 0.8125rem;
+            max-height: 600px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .log-line {
+            padding: 0.3rem 0.5rem;
+            border-left: 3px solid transparent;
+            border-radius: 2px;
+            margin-bottom: 0.25rem;
+        }
+
+        .log-line.info { border-left-color: #3b82f6; }
+        .log-line.warning { border-left-color: #f59e0b; }
+        .log-line.error { border-left-color: #ef4444; }
+
+        .log-time { color: #64748b; margin-right: 0.5rem; }
+
+        /* ─── Stats Panel ─── */
+        .stats-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+        }
+
+        .stats-panel h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+        }
+
+        .stats-json {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 1.25rem;
+            border-radius: var(--radius-sm);
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 0.8125rem;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.6;
+        }
+
+        /* ─── Progress Panel ─── */
+        .progress-panel {
+            background: var(--surface);
+            border: 1px solid var(--accent-border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+
+        .progress-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .progress-header h3 {
+            font-size: 0.9375rem;
             font-weight: 600;
         }
 
-        .status-extracted {
-            background: #dbeafe;
-            color: #1e40af;
+        .progress-pct {
+            font-weight: 700;
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
         }
 
-        .status-skipped {
-            background: #fef3c7;
-            color: #92400e;
+        .progress-track {
+            height: 6px;
+            background: var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
         }
 
-        .status-created {
-            background: #d1fae5;
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent) 0%, #6366f1 100%);
+            border-radius: 999px;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+
+        .progress-step {
+            font-size: 0.8125rem;
+            color: var(--ink-secondary);
+            padding: 0.5rem 0.75rem;
+            background: var(--accent-subtle);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.75rem;
+        }
+
+        .progress-log {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 0.75rem;
+            border-radius: var(--radius-sm);
+            font-family: "SF Mono", monospace;
+            font-size: 0.75rem;
+            max-height: 200px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        /* ─── Monitor Status ─── */
+        .monitor-banner {
+            background: var(--success-subtle);
+            border: 1px solid var(--success-border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+
+        .monitor-banner.visible { display: block; animation: fadeIn 0.3s ease; }
+
+        .monitor-banner-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .monitor-banner-title {
+            font-size: 0.875rem;
+            font-weight: 600;
             color: #065f46;
         }
 
-        .log-viewer {
-            background: #1f2937;
-            color: #e5e7eb;
-            padding: 1.5rem;
-            border-radius: 8px;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 0.85rem;
-            max-height: 600px;
-            overflow-y: auto;
+        .monitor-badge {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            background: var(--success);
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
-        .log-entry {
-            margin-bottom: 0.5rem;
-            padding: 0.5rem;
-            border-left: 3px solid transparent;
+        .monitor-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
         }
 
-        .log-entry.info {
-            border-left-color: #3b82f6;
+        .monitor-stat-label {
+            font-size: 0.6875rem;
+            color: #065f46;
+            opacity: 0.7;
         }
 
-        .log-entry.warning {
-            border-left-color: #f59e0b;
+        .monitor-stat-value {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #065f46;
         }
 
-        .log-entry.error {
-            border-left-color: #ef4444;
-        }
-
-        .log-time {
-            color: #9ca3af;
-            margin-right: 0.5rem;
-        }
-
+        /* ─── Empty State ─── */
         .empty-state {
             text-align: center;
-            padding: 4rem 2rem;
-            color: #9ca3af;
+            padding: 3rem 2rem;
+            color: var(--ink-muted);
         }
 
-        .empty-state svg {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 1rem;
-            opacity: 0.5;
+        .empty-state-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            opacity: 0.4;
         }
 
-        .refresh-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
+        .empty-state p { font-size: 0.875rem; }
+        .empty-state .hint { font-size: 0.8125rem; margin-top: 0.5rem; }
+
+        /* ─── Toast Notifications ─── */
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            pointer-events: none;
+        }
+
+        .toast {
+            padding: 0.75rem 1.25rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            animation: toastIn 0.3s ease;
+            pointer-events: auto;
+            max-width: 420px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .toast.success { background: #065f46; color: #ecfdf5; }
+        .toast.error { background: #991b1b; color: #fef2f2; }
+        .toast.info { background: #1e3a5f; color: #eff6ff; }
+        .toast.warning { background: #78350f; color: #fffbeb; }
+
+        .toast.hiding { animation: toastOut 0.3s ease forwards; }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to { opacity: 0; transform: translateY(12px) scale(0.95); }
+        }
+
+        /* ─── Modal ─── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-overlay.hiding { animation: fadeOut 0.2s ease forwards; }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .modal-box {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            max-width: 460px;
+            width: 100%;
+            padding: 1.5rem;
+            animation: modalIn 0.25s ease;
+        }
+
+        .modal-overlay.hiding .modal-box {
+            animation: modalOut 0.2s ease forwards;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95) translateY(8px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes modalOut {
+            from { opacity: 1; transform: scale(1) translateY(0); }
+            to { opacity: 0; transform: scale(0.95) translateY(8px); }
+        }
+
+        .modal-title {
+            font-size: 1.0625rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-desc {
+            font-size: 0.875rem;
+            color: var(--ink-secondary);
+            margin-bottom: 1.25rem;
+            line-height: 1.5;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.9375rem;
+            font-family: inherit;
+            margin-bottom: 1.25rem;
+            color: var(--ink);
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        /* ─── Skeleton Loading ─── */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-subtle) 25%, #e8ecf1 50%, var(--bg-subtle) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .topbar { padding: 0 1rem; }
+            .topbar-subtitle { display: none; }
+            .container { padding: 1.25rem 1rem 2rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .articles-grid { grid-template-columns: 1fr; }
+            .search-input { width: 100%; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* ─── Details/summary for read-more ─── */
+        .read-more {
+            margin-top: 0.5rem;
+        }
+
+        .read-more summary {
             cursor: pointer;
-            font-size: 1rem;
-            margin-bottom: 1.5rem;
-            transition: background 0.3s;
+            font-size: 0.8125rem;
+            color: var(--accent);
+            font-weight: 500;
+            list-style: none;
+        }
+        .read-more summary::-webkit-details-marker { display: none; }
+        .read-more summary::before {
+            content: "Leggi di piu \2192";
+        }
+        .read-more[open] summary::before {
+            content: "Chiudi \2191";
         }
 
-        .refresh-btn:hover {
-            background: #5568d3;
+        .read-more-body {
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background: var(--bg-subtle);
+            border-radius: var(--radius-sm);
+            font-size: 0.8125rem;
+            line-height: 1.6;
+            color: var(--ink-secondary);
+            white-space: pre-wrap;
         }
 
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #667eea;
+        /* ─── Info banner ─── */
+        .info-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1rem;
+            background: var(--accent-subtle);
+            border: 1px solid var(--accent-border);
+            border-radius: var(--radius-sm);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: #1e40af;
+            margin-bottom: 1rem;
         }
+
+        .candidate-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .candidate-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📰 News Pipeline Dashboard</h1>
-        <p>Monitoraggio articoli estratti e processati</p>
+    <!-- Top bar -->
+    <div class="topbar">
+        <div class="topbar-brand">
+            <div class="topbar-logo">N</div>
+            <span class="topbar-title">News Tracker</span>
+            <span class="topbar-subtitle">Pipeline &amp; Dashboard</span>
+        </div>
+        <div class="topbar-actions">
+            <button class="btn btn-success btn-sm" onclick="openExtractModal()" id="extractBtn">Estrai Articoli</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadData()">Aggiorna</button>
+            <button class="btn btn-warning btn-sm" onclick="toggleMonitor()" id="monitorBtn">Monitoraggio</button>
+        </div>
     </div>
 
     <div class="container">
+        <!-- Stats -->
         <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
-                <h3>Totale Articoli</h3>
-                <div class="value" id="totalArticles">0</div>
+                <div class="stat-label">Totale</div>
+                <div class="stat-value blue" id="totalArticles">0</div>
             </div>
             <div class="stat-card">
-                <h3>Estratti</h3>
-                <div class="value success" id="extractedCount">0</div>
+                <div class="stat-label">Estratti</div>
+                <div class="stat-value blue" id="extractedCount">0</div>
             </div>
             <div class="stat-card">
-                <h3>Creati</h3>
-                <div class="value success" id="createdCount">0</div>
+                <div class="stat-label">Creati</div>
+                <div class="stat-value green" id="createdCount">0</div>
             </div>
             <div class="stat-card">
-                <h3>Saltati</h3>
-                <div class="value warning" id="skippedCount">0</div>
+                <div class="stat-label">Saltati</div>
+                <div class="stat-value amber" id="skippedCount">0</div>
             </div>
             <div class="stat-card">
-                <h3>Falliti</h3>
-                <div class="value error" id="failedCount">0</div>
+                <div class="stat-label">Falliti</div>
+                <div class="stat-value red" id="failedCount">0</div>
             </div>
         </div>
 
-        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-            <button class="refresh-btn" onclick="loadData()">🔄 Aggiorna Dati</button>
-            <button class="refresh-btn" onclick="extractArticles()" id="extractBtn" style="background: #10b981;">
-                📰 Estrai Nuovi Articoli
-            </button>
-            <button class="refresh-btn" onclick="toggleMonitor()" id="monitorBtn" style="background: #f59e0b;">
-                🔄 Monitoraggio Continuo
-            </button>
+        <!-- Monitor banner -->
+        <div class="monitor-banner" id="monitorBanner"></div>
+
+        <!-- Progress panel -->
+        <div class="progress-panel" id="progressPanel">
+            <div class="progress-header">
+                <h3>Estrazione in corso</h3>
+                <span class="progress-pct" id="progressPct">0%</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-step" id="progressStep">In attesa...</div>
+            <div class="progress-log" id="progressLog">
+                <div style="color:#64748b;">In attesa di avvio...</div>
+            </div>
         </div>
-        <div id="monitorStatus" style="display: none; margin-bottom: 1.5rem;"></div>
-        <div id="extractStatus" style="display: none; margin-bottom: 1.5rem;"></div>
-        <div id="pipelineStatus" style="display: none; margin-bottom: 1.5rem;"></div>
-        
-        <!-- Barra di caricamento con log in tempo reale -->
-        <div id="progressBar" style="display: none; margin-bottom: 1.5rem;">
-            <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="margin: 0; color: #1f2937;">📊 Progresso Estrazione</h3>
-                    <div id="progressPercent" style="font-weight: 600; color: #667eea;">0%</div>
-                </div>
-                
-                <!-- Barra di progresso -->
-                <div style="background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
-                    <div id="progressBarFill" style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-                </div>
-                
-                <!-- Step corrente -->
-                <div id="currentStep" style="margin-bottom: 1rem; padding: 0.75rem; background: #f3f4f6; border-radius: 6px;">
-                    <strong style="color: #667eea;">In attesa...</strong>
-                </div>
-                
-                <!-- Log in tempo reale -->
-                <div style="max-height: 300px; overflow-y: auto; background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 6px; font-family: 'Monaco', 'Courier New', monospace; font-size: 0.85rem;">
-                    <div id="progressLog" style="line-height: 1.6;">
-                        <div style="color: #9ca3af;">In attesa di avvio...</div>
-                    </div>
+
+        <!-- Tabs -->
+        <div class="tabs-bar" id="tabsBar">
+            <button class="tab-btn active" data-tab="candidates">Candidati<span class="tab-badge" id="candidatesBadge">0</span></button>
+            <button class="tab-btn" data-tab="articles">Articoli<span class="tab-badge" id="articlesBadge">0</span></button>
+            <button class="tab-btn" data-tab="logs">Log</button>
+            <button class="tab-btn" data-tab="stats">Statistiche</button>
+        </div>
+
+        <!-- Candidates Tab -->
+        <div class="tab-panel active" id="panel-candidates">
+            <div class="toolbar">
+                <button class="btn btn-primary btn-sm" onclick="loadCandidates(true)">Aggiorna Feed</button>
+                <button class="btn btn-success btn-sm" onclick="extractSelectedCandidates()" id="extractSelectedBtn">
+                    Estrai Selezionati (<span id="selectedCount">0</span>)
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="selectAllCandidates()">Seleziona Tutti</button>
+                <button class="btn btn-ghost btn-sm" onclick="deselectAllCandidates()">Deseleziona</button>
+                <div class="toolbar-spacer"></div>
+                <input type="text" class="search-input" id="candidateSearch" placeholder="Cerca candidati..." oninput="filterCandidates()">
+            </div>
+            <div class="source-pills" id="sourcePills"></div>
+            <div id="candidatesContent">
+                <div class="empty-state">
+                    <p>Caricamento candidati...</p>
                 </div>
             </div>
         </div>
 
-        <div class="tabs">
-            <button class="tab active" onclick="switchTab('articles')">Articoli</button>
-            <button class="tab" onclick="switchTab('logs')">Log</button>
-            <button class="tab" onclick="switchTab('stats')">Statistiche</button>
-        </div>
-
-        <div id="articlesTab" class="tab-content active">
+        <!-- Articles Tab -->
+        <div class="tab-panel" id="panel-articles">
+            <div class="toolbar">
+                <input type="text" class="search-input" id="articleSearch" placeholder="Cerca articoli..." oninput="filterArticles()">
+            </div>
             <div class="articles-grid" id="articlesGrid">
-                <div class="loading">Caricamento articoli...</div>
+                <div class="empty-state"><p>Caricamento articoli...</p></div>
             </div>
         </div>
 
-        <div id="logsTab" class="tab-content">
+        <!-- Logs Tab -->
+        <div class="tab-panel" id="panel-logs">
             <div class="log-viewer" id="logViewer">
-                <div class="loading">Caricamento log...</div>
+                <div style="color:#64748b;">Caricamento log...</div>
             </div>
         </div>
 
-        <div id="statsTab" class="tab-content">
+        <!-- Stats Tab -->
+        <div class="tab-panel" id="panel-stats">
             <div id="statsContent">
-                <div class="loading">Caricamento statistiche...</div>
+                <div class="empty-state"><p>Caricamento statistiche...</p></div>
             </div>
         </div>
     </div>
 
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
-        // Funzione per caricare i dati
-        async function loadData() {
-            try {
-                // Carica articoli estratti
-                await loadArticles();
-                
-                // Carica log
-                await loadLogs();
-                
-                // Carica statistiche
-                await loadStats();
-            } catch (error) {
-                console.error('Errore caricamento dati:', error);
-            }
-        }
+    /* ────────── Utility: Toast Notifications ────────── */
+    function toast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        const icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
+        el.textContent = `${icons[type] || ''} ${message}`;
+        container.appendChild(el);
+        setTimeout(() => {
+            el.classList.add('hiding');
+            setTimeout(() => el.remove(), 300);
+        }, 4000);
+    }
 
-        // Carica articoli dalla cache
-        async function loadArticles() {
-            const response = await fetch('/api/articles');
-            const articles = await response.json();
-            
-            const grid = document.getElementById('articlesGrid');
-            
-            if (articles.length === 0) {
-                grid.innerHTML = `
-                    <div class="empty-state">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        <p>Nessun articolo estratto ancora</p>
-                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Esegui la pipeline per vedere gli articoli qui</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            grid.innerHTML = articles.map(article => {
-                const hasRewritten = article.has_rewritten || false;
-                const rewritten = article.rewritten || {};
-                const qualityGate = article.quality_gate || {};
-                const qualityPassed = qualityGate.passed !== false; // Default true se non presente
-                const displayTitle = hasRewritten && rewritten.headline ? rewritten.headline : article.title;
-                const displayText = hasRewritten && rewritten.lead ? rewritten.lead : (article.text ? article.text.substring(0, 150) + '...' : 'Nessun contenuto');
-                const statusClass = hasRewritten ? (qualityPassed ? 'status-created' : 'status-skipped') : 'status-extracted';
-                const statusText = hasRewritten ? (qualityPassed ? 'Riscritto' : 'Riscritto (scartato)') : 'Estratto';
-                
-                return `
-                <div class="article-card">
-                    ${article.images && article.images.length > 0 ? 
-                        `<img src="${article.images[0]}" alt="${displayTitle}" class="article-image" onerror="this.style.display='none'">` : 
-                        '<div class="article-image"></div>'
-                    }
-                    <div class="article-content">
-                        <span class="article-source">${article.source_name || 'Sconosciuto'}</span>
-                        ${hasRewritten ? 
-                            (qualityPassed ? 
-                                '<span style="background: #10b981; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">✨ AI</span>' : 
-                                '<span style="background: #f59e0b; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">⚠️ Scartato</span>'
-                            ) : ''}
-                        ${hasRewritten ? 
-                            (qualityGate.similarity_score !== undefined && qualityGate.similarity_score !== null ? 
-                                `<div style="margin-top: 0.75rem; padding: 0.75rem; background: ${qualityPassed ? '#d1fae5' : '#fef3c7'}; border-left: 3px solid ${qualityPassed ? '#10b981' : '#f59e0b'}; border-radius: 4px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                        <strong style="color: ${qualityPassed ? '#065f46' : '#92400e'}; font-size: 0.85rem;">Similarità con originale:</strong>
-                                        <span style="font-weight: 700; font-size: 1rem; color: ${qualityPassed ? '#059669' : '#d97706'};">
-                                            ${(qualityGate.similarity_score * 100).toFixed(1)}%
-                                        </span>
-                                    </div>
-                                    <div style="background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 0.5rem;">
-                                        <div style="background: ${qualityGate.similarity_score < 0.7 ? '#10b981' : qualityGate.similarity_score < 0.85 ? '#f59e0b' : '#ef4444'}; height: 100%; width: ${qualityGate.similarity_score * 100}%; transition: width 0.3s;"></div>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #6b7280;">
-                                        <span>0% (completamente originale)</span>
-                                        <span>100% (identico)</span>
-                                    </div>
-                                    ${!qualityPassed && qualityGate.issues && qualityGate.issues.length > 0 ? 
-                                        `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid ${qualityPassed ? '#a7f3d0' : '#fde68a'}; font-size: 0.8rem; color: ${qualityPassed ? '#065f46' : '#92400e'};">
-                                            <strong>Motivo scarto:</strong> ${qualityGate.issues[0]}
-                                        </div>` : ''
-                                    }
-                                </div>` : 
-                                `<div style="margin-top: 0.5rem; padding: 0.5rem; background: #e5e7eb; border-left: 3px solid #9ca3af; border-radius: 4px; font-size: 0.8rem; color: #6b7280;">
-                                    <em>Similarità non ancora calcolata. Riscrivi l'articolo per vedere il valore.</em>
-                                </div>`
-                            ) : ''
-                        }
-                        <h3 class="article-title">${displayTitle || 'Nessun titolo'}</h3>
-                        <p class="article-excerpt">${displayText}</p>
-                        ${hasRewritten && rewritten.body_markdown ? 
-                            `<details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; color: #667eea; font-size: 0.85rem;">Leggi articolo completo riscritto</summary>
-                                <div style="margin-top: 0.5rem; padding: 0.75rem; background: #f5f5f5; border-radius: 4px; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap;">${rewritten.body_markdown.substring(0, 500)}${rewritten.body_markdown.length > 500 ? '...' : ''}</div>
-                            </details>` : ''
-                        }
-                        <div class="article-meta">
-                            <span>${article.published_at ? new Date(article.published_at).toLocaleDateString('it-IT') : 'Data sconosciuta'}</span>
-                            <span class="article-status ${statusClass}">${statusText}</span>
-                        </div>
-                        <div style="margin-top: 0.75rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-                            ${hasRewritten ? 
-                                `<a href="/article.html?url=${encodeURIComponent(article.url)}" style="background: #10b981; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.9rem; font-weight: 600;">📖 Leggi Articolo Riscritto</a>` : 
-                                `<button onclick="rewriteArticle('${article.url}', this)" style="background: #667eea; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;">✨ Riscrivi con AI</button>`
-                            }
-                            <a href="${article.url}" target="_blank" style="color: #667eea; text-decoration: none; font-size: 0.85rem; padding: 0.5rem 0;">→ Vedi originale</a>
-                            <button onclick="deleteArticle('${article.url}', this)" style="background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;">🗑️ Elimina</button>
-                        </div>
-                        <div id="rewrite-status-${btoa(article.url).replace(/[^a-zA-Z0-9]/g, '')}" style="margin-top: 0.5rem; display: none;"></div>
-                    </div>
+    /* ────────── Utility: Modal Dialog ────────── */
+    function openModal({ title, desc, inputLabel, inputDefault, confirmText, cancelText, onConfirm, onCancel, danger }) {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        const hasInput = inputLabel !== undefined;
+        overlay.innerHTML = `
+            <div class="modal-box">
+                <div class="modal-title">${title}</div>
+                <div class="modal-desc">${desc || ''}</div>
+                ${hasInput ? `<input class="modal-input" type="text" value="${inputDefault || ''}" placeholder="${inputLabel || ''}">` : ''}
+                <div class="modal-actions">
+                    <button class="btn btn-ghost" data-action="cancel">${cancelText || 'Annulla'}</button>
+                    <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmText || 'Conferma'}</button>
                 </div>
-            `;
-            }).join('');
-            
-            // Aggiorna statistiche
-            updateStats(articles);
-        }
+            </div>
+        `;
 
-        // Carica log
-        async function loadLogs() {
-            const response = await fetch('/api/logs');
-            const logs = await response.json();
-            
-            const viewer = document.getElementById('logViewer');
-            
-            if (logs.length === 0) {
-                viewer.innerHTML = '<div class="empty-state">Nessun log disponibile</div>';
-                return;
-            }
-            
-            viewer.innerHTML = logs.map(log => {
-                const level = log.level || 'info';
-                const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString('it-IT') : '';
-                return `
-                    <div class="log-entry ${level}">
-                        <span class="log-time">${time}</span>
-                        <span>${log.message || JSON.stringify(log)}</span>
-                    </div>
-                `;
-            }).join('');
-            
-            // Scroll to bottom
-            viewer.scrollTop = viewer.scrollHeight;
-        }
+        document.body.appendChild(overlay);
 
-        // Carica statistiche
-        async function loadStats() {
-            const response = await fetch('/api/stats');
-            const stats = await response.json();
-            
-            const content = document.getElementById('statsContent');
-            content.innerHTML = `
-                <div style="background: white; padding: 2rem; border-radius: 8px;">
-                    <h2 style="margin-bottom: 1.5rem;">Statistiche Pipeline</h2>
-                    <pre style="background: #f5f5f5; padding: 1.5rem; border-radius: 6px; overflow-x: auto;">${JSON.stringify(stats, null, 2)}</pre>
-                </div>
-            `;
-        }
+        const close = () => {
+            overlay.classList.add('hiding');
+            setTimeout(() => overlay.remove(), 200);
+        };
 
-        // Aggiorna statistiche cards
-        function updateStats(articles) {
-            document.getElementById('totalArticles').textContent = articles.length;
-            document.getElementById('extractedCount').textContent = articles.length;
-            
-            // Conta per status (se disponibile nei log)
-            // Questo verrà aggiornato quando carichiamo i log completi
-        }
+        const input = overlay.querySelector('.modal-input');
+        if (input) { input.focus(); input.select(); }
 
-        // Switch tab
-        function switchTab(tabName) {
-            // Rimuovi active da tutti i tab
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            
-            // Aggiungi active al tab selezionato
-            event.target.classList.add('active');
-            document.getElementById(tabName + 'Tab').classList.add('active');
-        }
+        overlay.querySelector('[data-action="cancel"]').onclick = () => { close(); if (onCancel) onCancel(); };
+        overlay.querySelector('[data-action="confirm"]').onclick = () => {
+            const val = input ? input.value : true;
+            close();
+            if (onConfirm) onConfirm(val);
+        };
 
-        // Funzione per estrarre nuovi articoli
-        async function extractArticles() {
-            const btn = document.getElementById('extractBtn');
-            const statusDiv = document.getElementById('extractStatus');
-            const originalText = btn.textContent;
-            
-            // Chiedi quanti articoli estrarre
-            const limit = prompt('Quanti articoli vuoi estrarre?', '10');
-            if (!limit || isNaN(limit) || parseInt(limit) <= 0) {
-                return;
-            }
-            
-            // Disabilita pulsante e mostra loading
-            btn.disabled = true;
-            btn.textContent = '⏳ Estrazione in corso...';
-            btn.style.background = '#9ca3af';
-            statusDiv.style.display = 'block';
-            statusDiv.innerHTML = `
-                <div style="background: #dbeafe; color: #1e40af; padding: 1rem; border-radius: 6px;">
-                    <strong>⏳ Estrazione in corso...</strong>
-                    <p style="margin-top: 0.5rem; margin-bottom: 0;">Sto estraendo fino a ${limit} articoli dai feed RSS. Questo potrebbe richiedere alcuni minuti...</p>
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">Puoi chiudere questa finestra, l'estrazione continuerà in background.</div>
-                </div>
-            `;
-            
-            try {
-                const response = await fetch('/api/extract-articles', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ limit: parseInt(limit) })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Errore nell\'estrazione');
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const val = input.value;
+                    close();
+                    if (onConfirm) onConfirm(val);
                 }
-                
-                // Successo - pipeline avviata, inizia polling
-                statusDiv.innerHTML = `
-                    <div style="background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 6px;">
-                        <strong>✅ Estrazione avviata!</strong>
-                        <p style="margin-top: 0.5rem; margin-bottom: 0;">La pipeline sta processando fino a ${limit} articoli.</p>
-                    </div>
-                `;
-                
-                // Inizia polling dello stato
-                startStatusPolling();
-                
-            } catch (error) {
-                btn.disabled = false;
-                btn.textContent = originalText;
-                btn.style.background = '#10b981';
-                statusDiv.innerHTML = `
-                    <div style="background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 6px;">
-                        <strong>❌ Errore:</strong> ${error.message}
-                    </div>
-                `;
-            }
+            });
         }
 
-        // Funzione per avviare/fermare monitoraggio continuo
-        let monitorStatusInterval = null;
-        
-        async function toggleMonitor() {
-            const btn = document.getElementById('monitorBtn');
-            const statusDiv = document.getElementById('monitorStatus');
-            
-            try {
-                // Controlla stato attuale
-                const statusResponse = await fetch('/api/monitor/status');
-                const status = await statusResponse.json();
-                
-                if (status.running) {
-                    // Ferma monitor
-                    const response = await fetch('/api/monitor/stop', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        btn.textContent = '🔄 Monitoraggio Continuo';
-                        btn.style.background = '#f59e0b';
-                        statusDiv.style.display = 'none';
-                        
-                        if (monitorStatusInterval) {
-                            clearInterval(monitorStatusInterval);
-                            monitorStatusInterval = null;
-                        }
-                    } else {
-                        alert(`Errore: ${data.error || 'Errore sconosciuto'}`);
-                    }
-                } else {
-                    // Avvia monitor
-                    const pollInterval = prompt('Intervallo tra controlli (in secondi):', '300');
-                    if (!pollInterval) return;
-                    
-                    const response = await fetch('/api/monitor/start', {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) { close(); if (onCancel) onCancel(); }
+        });
+    }
+
+    /* ────────── Tab Switching ────────── */
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('panel-' + tab).classList.add('active');
+
+            if (tab === 'logs') loadLogs();
+            else if (tab === 'stats') loadStats();
+            else if (tab === 'articles') loadArticles();
+            else if (tab === 'candidates') loadCandidates();
+        });
+    });
+
+    /* ────────── Data Loading ────────── */
+    async function loadData() {
+        try {
+            await Promise.all([loadArticles(), loadLogs(), loadStats()]);
+            toast('Dashboard aggiornata', 'success');
+        } catch (e) {
+            console.error('Errore caricamento dati:', e);
+            toast('Errore nel caricamento', 'error');
+        }
+    }
+
+    /* ── Articles ── */
+    let allArticlesCache = [];
+
+    async function loadArticles() {
+        const response = await fetch('/api/articles');
+        const articles = await response.json();
+        allArticlesCache = articles;
+        renderArticles(articles);
+        updateStats(articles);
+        document.getElementById('articlesBadge').textContent = articles.length;
+    }
+
+    function renderArticles(articles) {
+        const grid = document.getElementById('articlesGrid');
+
+        if (articles.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1;">
+                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <p>Nessun articolo estratto</p>
+                    <p class="hint">Esegui la pipeline per vedere gli articoli qui</p>
+                </div>`;
+            return;
+        }
+
+        grid.innerHTML = articles.map(article => {
+            const hasRewritten = article.has_rewritten || false;
+            const rewritten = article.rewritten || {};
+            const qg = article.quality_gate || {};
+            const passed = qg.passed !== false;
+            const title = hasRewritten && rewritten.headline ? rewritten.headline : article.title;
+            const text = hasRewritten && rewritten.lead ? rewritten.lead : (article.text ? article.text.substring(0, 160) + '...' : '');
+            const isPremium = article.is_paywalled === true;
+            const canRewrite = (article.text && article.text.trim().length >= 100) && (article.title && article.title.trim().length >= 10) && !isPremium;
+
+            let badgeHTML = `<span class="source-badge" style="background:${getSourceColor(article.source_name)}">${article.source_name || 'N/A'}</span>`;
+            if (isPremium) badgeHTML += '<span class="badge-premium">PREMIUM</span>';
+            if (hasRewritten) {
+                badgeHTML += passed
+                    ? '<span class="badge badge-ai">AI Riscritto</span>'
+                    : '<span class="badge badge-skipped">Scartato</span>';
+            } else {
+                badgeHTML += '<span class="badge badge-extracted">Estratto</span>';
+            }
+
+            let simHTML = '';
+            if (hasRewritten && qg.similarity_score != null) {
+                const score = qg.similarity_score;
+                const pct = (score * 100).toFixed(1);
+                const color = score < 0.7 ? 'var(--success)' : score < 0.85 ? 'var(--warning)' : 'var(--error)';
+                simHTML = `
+                    <div class="sim-meter">
+                        <div class="sim-meter-header">
+                            <span style="color:var(--ink-secondary)">Similarita</span>
+                            <span style="color:${color};font-weight:700">${pct}%</span>
+                        </div>
+                        <div class="sim-meter-bar"><div class="sim-meter-fill" style="width:${pct}%;background:${color}"></div></div>
+                        ${!passed && qg.issues && qg.issues.length ? `<div class="sim-meter-note">${qg.issues[0]}</div>` : ''}
+                    </div>`;
+            }
+
+            let readMoreHTML = '';
+            if (hasRewritten && rewritten.body_markdown) {
+                readMoreHTML = `
+                    <details class="read-more">
+                        <summary></summary>
+                        <div class="read-more-body">${rewritten.body_markdown.substring(0, 600)}${rewritten.body_markdown.length > 600 ? '...' : ''}</div>
+                    </details>`;
+            }
+
+            let actionsHTML = '';
+            if (hasRewritten) {
+                actionsHTML = `<a href="/article.html?url=${encodeURIComponent(article.url)}" class="btn btn-primary btn-sm">Leggi</a>`;
+            } else if (canRewrite) {
+                actionsHTML = `<button class="btn btn-primary btn-sm" onclick="rewriteArticle('${article.url}', this)">Riscrivi con AI</button>`;
+            } else {
+                actionsHTML = `<button class="btn btn-ghost btn-sm" disabled>Contenuto troppo corto</button>`;
+            }
+            actionsHTML += ` <a href="${article.url}" target="_blank" class="btn btn-ghost btn-sm">Originale</a>`;
+            actionsHTML += ` <button class="btn btn-danger btn-sm" onclick="deleteArticle('${article.url}', this)">Elimina</button>`;
+
+            const imgHTML = article.images && article.images.length > 0
+                ? `<img src="${article.images[0]}" alt="" class="article-card-img" onerror="this.style.display='none'">`
+                : '<div class="article-card-img"></div>';
+
+            return `
+                <div class="article-card" data-search="${(title || '').toLowerCase()} ${(article.source_name || '').toLowerCase()}">
+                    ${imgHTML}
+                    <div class="article-card-body">
+                        <div class="article-card-badges">${badgeHTML}</div>
+                        <div class="article-card-title">${title || 'Nessun titolo'}</div>
+                        <div class="article-card-excerpt">${text}</div>
+                        ${simHTML}
+                        ${readMoreHTML}
+                        <div class="article-card-footer">
+                            <span>${article.published_at ? new Date(article.published_at).toLocaleDateString('it-IT') : ''}</span>
+                        </div>
+                        <div class="article-card-actions">${actionsHTML}</div>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    function filterArticles() {
+        const q = document.getElementById('articleSearch').value.toLowerCase();
+        if (!q) { renderArticles(allArticlesCache); return; }
+        const filtered = allArticlesCache.filter(a => {
+            const title = (a.rewritten?.headline || a.title || '').toLowerCase();
+            const source = (a.source_name || '').toLowerCase();
+            return title.includes(q) || source.includes(q);
+        });
+        renderArticles(filtered);
+    }
+
+    function updateStats(articles) {
+        document.getElementById('totalArticles').textContent = articles.length;
+        document.getElementById('extractedCount').textContent = articles.length;
+    }
+
+    /* ── Logs ── */
+    async function loadLogs() {
+        const response = await fetch('/api/logs');
+        const logs = await response.json();
+        const viewer = document.getElementById('logViewer');
+
+        if (logs.length === 0) {
+            viewer.innerHTML = '<div style="color:#64748b;text-align:center;padding:2rem;">Nessun log disponibile</div>';
+            return;
+        }
+
+        viewer.innerHTML = logs.map(log => {
+            const level = log.level || 'info';
+            const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString('it-IT') : '';
+            return `<div class="log-line ${level}"><span class="log-time">${time}</span>${log.message || JSON.stringify(log)}</div>`;
+        }).join('');
+        viewer.scrollTop = viewer.scrollHeight;
+    }
+
+    /* ── Stats ── */
+    async function loadStats() {
+        const response = await fetch('/api/stats');
+        const stats = await response.json();
+        const content = document.getElementById('statsContent');
+
+        // Build visual stat cards + raw JSON
+        const entries = Object.entries(stats);
+        const cardsHTML = entries.map(([key, val]) => {
+            const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const isNum = typeof val === 'number';
+            return `
+                <div class="stat-card">
+                    <div class="stat-label">${label}</div>
+                    <div class="stat-value ${isNum ? 'blue' : ''}">${isNum ? val : (val || '-')}</div>
+                </div>`;
+        }).join('');
+
+        content.innerHTML = `
+            <div class="stats-panel">
+                <h2>Statistiche Pipeline</h2>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.75rem;margin-bottom:1.5rem;">
+                    ${cardsHTML}
+                </div>
+                <details>
+                    <summary style="cursor:pointer;font-size:0.8125rem;color:var(--ink-muted);margin-bottom:0.75rem;">JSON completo</summary>
+                    <div class="stats-json">${JSON.stringify(stats, null, 2)}</div>
+                </details>
+            </div>`;
+    }
+
+    /* ────────── Candidates ────────── */
+    let allCandidatesData = null;
+    let currentSourceTab = null;
+    let candidatesRendered = [];
+
+    function cleanDescription(raw) {
+        if (!raw) return '';
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = raw;
+        wrapper.querySelectorAll('img, figure, picture, svg, video, iframe').forEach(el => el.remove());
+        return (wrapper.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function isPremiumCandidate(text, title) {
+        const hay = `${title || ''} ${text || ''}`.toLowerCase();
+        const kw = ['contenuto per gli abbonati','contenuto riservato agli abbonati','abbonati per continuare a leggere','abbonati per leggere','abbonati per continuare','accedi per continuare','solo per abbonati','contenuto premium','articolo riservato','abbonamento necessario','iscriviti per leggere'];
+        return kw.some(k => hay.includes(k));
+    }
+
+    function getSourceColor(source) {
+        if (!source) return '#64748b';
+        const s = source.toLowerCase();
+        if (s.includes('messaggero')) return '#ea580c';
+        if (s.includes('repubblica')) return '#dc2626';
+        if (s.includes('corriere')) return '#1e293b';
+        if (s.includes('giornale')) return '#2563eb';
+        if (s.includes('ansa')) return '#0d9488';
+        if (s.includes('rai')) return '#7c3aed';
+        if (s.includes('tgcom')) return '#0891b2';
+        if (s.includes('sky')) return '#0284c7';
+        return '#64748b';
+    }
+
+    async function loadCandidates(refresh = false) {
+        try {
+            const url = refresh ? '/api/candidates?refresh=true' : '/api/candidates';
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.success) throw new Error(data.error || 'Errore');
+
+            allCandidatesData = data;
+            document.getElementById('candidatesBadge').textContent = data.total;
+
+            if (data.total === 0) {
+                document.getElementById('candidatesContent').innerHTML = `
+                    <div class="empty-state">
+                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <p>Nessun candidato trovato nei feed RSS</p>
+                    </div>`;
+                document.getElementById('sourcePills').innerHTML = '';
+                return;
+            }
+
+            // Build source pills
+            const pillsDiv = document.getElementById('sourcePills');
+            let pillsHTML = `<button class="source-pill active" onclick="switchSource('all', this)">Tutti (${data.total})</button>`;
+            for (const source of data.sources) {
+                const count = data.by_source[source].length;
+                pillsHTML += `<button class="source-pill" onclick="switchSource('${source.replace(/'/g, "\\'")}', this)">${source} (${count})</button>`;
+            }
+            pillsDiv.innerHTML = pillsHTML;
+
+            switchSource('all');
+            if (refresh) toast('Feed aggiornati', 'success');
+        } catch (e) {
+            console.error('Errore candidati:', e);
+            document.getElementById('candidatesContent').innerHTML = `<div class="empty-state"><p style="color:var(--error);">${e.message}</p></div>`;
+            if (refresh) toast('Errore aggiornamento feed', 'error');
+        }
+    }
+
+    function switchSource(sourceName, clickedEl) {
+        if (!allCandidatesData) return;
+        currentSourceTab = sourceName;
+
+        document.querySelectorAll('.source-pill').forEach(p => p.classList.remove('active'));
+        if (clickedEl) {
+            clickedEl.classList.add('active');
+        } else {
+            const pills = document.querySelectorAll('.source-pill');
+            if (pills.length) pills[0].classList.add('active');
+        }
+
+        let items = [];
+        if (sourceName === 'all') {
+            for (const src of allCandidatesData.sources) {
+                items.push(...allCandidatesData.by_source[src].map(a => ({...a, source: src})));
+            }
+        } else {
+            items = (allCandidatesData.by_source[sourceName] || []).map(a => ({...a, source: sourceName}));
+        }
+
+        items.sort((a, b) => {
+            const dA = a.published_at ? new Date(a.published_at) : new Date(0);
+            const dB = b.published_at ? new Date(b.published_at) : new Date(0);
+            return dB - dA;
+        });
+
+        candidatesRendered = items;
+        renderCandidates(items);
+        updateSelectedCount();
+    }
+
+    function renderCandidates(items) {
+        const container = document.getElementById('candidatesContent');
+
+        if (items.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>Nessun articolo per questa fonte</p></div>';
+            return;
+        }
+
+        const infoBar = `<div class="info-bar">${items.length} candidat${items.length === 1 ? 'o' : 'i'} ${currentSourceTab === 'all' ? 'totali' : 'da ' + currentSourceTab}</div>`;
+
+        const rows = items.map(article => {
+            const desc = cleanDescription(article.description);
+            const premium = isPremiumCandidate(desc, article.title);
+            const date = article.published_at ? new Date(article.published_at).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+            const color = getSourceColor(article.source);
+
+            return `
+                <div class="candidate-row" data-search="${(article.title || '').toLowerCase()} ${(article.source || '').toLowerCase()} ${desc.toLowerCase()}">
+                    <input type="checkbox" class="candidate-checkbox" data-url="${article.url}" data-source="${article.source}" onchange="updateSelectedCount()">
+                    <div class="candidate-body">
+                        <div class="candidate-title">${article.title || 'Nessun titolo'}</div>
+                        ${desc ? `<div class="candidate-desc">${desc}</div>` : ''}
+                        <div class="candidate-meta">
+                            <span class="source-badge" style="background:${color}">${article.source}</span>
+                            ${premium ? '<span class="badge-premium">PREMIUM</span>' : ''}
+                            <span>${date}</span>
+                            <a href="${article.url}" target="_blank" class="candidate-link">Apri &rarr;</a>
+                        </div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        container.innerHTML = infoBar + '<div class="candidate-list">' + rows + '</div>';
+    }
+
+    function filterCandidates() {
+        const q = document.getElementById('candidateSearch').value.toLowerCase();
+        if (!q) { renderCandidates(candidatesRendered); return; }
+        const filtered = candidatesRendered.filter(a => {
+            const t = (a.title || '').toLowerCase();
+            const s = (a.source || '').toLowerCase();
+            const d = cleanDescription(a.description).toLowerCase();
+            return t.includes(q) || s.includes(q) || d.includes(q);
+        });
+        renderCandidates(filtered);
+    }
+
+    function updateSelectedCount() {
+        const count = document.querySelectorAll('.candidate-checkbox:checked').length;
+        document.getElementById('selectedCount').textContent = count;
+    }
+
+    function selectAllCandidates() {
+        document.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = true);
+        updateSelectedCount();
+    }
+
+    function deselectAllCandidates() {
+        document.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = false);
+        updateSelectedCount();
+    }
+
+    /* ────────── Extraction ────────── */
+    function openExtractModal() {
+        openModal({
+            title: 'Estrai Nuovi Articoli',
+            desc: 'Quanti articoli vuoi estrarre dai feed RSS?',
+            inputLabel: 'Numero articoli',
+            inputDefault: '10',
+            confirmText: 'Estrai',
+            onConfirm: (val) => {
+                const limit = parseInt(val);
+                if (!limit || limit <= 0) { toast('Inserisci un numero valido', 'warning'); return; }
+                extractArticles(limit);
+            }
+        });
+    }
+
+    async function extractArticles(limit) {
+        const btn = document.getElementById('extractBtn');
+        btn.disabled = true;
+        btn.textContent = 'Estrazione...';
+
+        try {
+            const response = await fetch('/api/extract-articles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Errore');
+
+            toast('Estrazione avviata', 'success');
+            startStatusPolling();
+        } catch (e) {
+            toast(e.message, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Estrai Articoli';
+        }
+    }
+
+    async function extractSelectedCandidates() {
+        const checked = document.querySelectorAll('.candidate-checkbox:checked');
+        const urls = Array.from(checked).map(cb => cb.dataset.url);
+
+        if (urls.length === 0) { toast('Seleziona almeno un articolo', 'warning'); return; }
+
+        openModal({
+            title: 'Conferma Estrazione',
+            desc: `Vuoi estrarre e riscrivere ${urls.length} articol${urls.length === 1 ? 'o' : 'i'} selezionat${urls.length === 1 ? 'o' : 'i'}?`,
+            confirmText: 'Estrai',
+            onConfirm: async () => {
+                const btn = document.getElementById('extractSelectedBtn');
+                const orig = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'Estrazione...';
+
+                try {
+                    const response = await fetch('/api/extract-articles', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ poll_interval: parseInt(pollInterval) })
+                        body: JSON.stringify({ urls })
                     });
                     const data = await response.json();
-                    
-                    if (response.ok) {
-                        btn.textContent = '⏸️ Ferma Monitoraggio';
-                        btn.style.background = '#ef4444';
-                        statusDiv.style.display = 'block';
-                        
-                        // Aggiorna stato ogni 5 secondi
-                        updateMonitorStatus();
-                        if (monitorStatusInterval) {
-                            clearInterval(monitorStatusInterval);
+                    if (!response.ok) throw new Error(data.error || 'Errore');
+
+                    toast(data.message, 'success');
+                    loadCandidates();
+                    setTimeout(() => {
+                        document.querySelector('[data-tab="articles"]').click();
+                        loadArticles();
+                    }, 1000);
+                } catch (e) {
+                    toast(e.message, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = orig;
+                }
+            }
+        });
+    }
+
+    /* ────────── Pipeline Status Polling ────────── */
+    let statusPollingInterval = null;
+
+    function startStatusPolling() {
+        if (statusPollingInterval) clearInterval(statusPollingInterval);
+
+        statusPollingInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/pipeline-status');
+                const status = await response.json();
+                updatePipelineStatus(status);
+
+                if (status.status === 'completed') {
+                    setTimeout(() => {
+                        if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; }
+                        loadArticles();
+                    }, 5000);
+                }
+            } catch (e) { console.error('Polling error:', e); }
+        }, 2000);
+    }
+
+    function updatePipelineStatus(status) {
+        const panel = document.getElementById('progressPanel');
+
+        if (status.status === 'idle') {
+            panel.classList.remove('visible');
+            return;
+        }
+
+        panel.classList.add('visible');
+
+        const stepNames = {
+            'fetching': 'Raccolta URL da feed RSS',
+            'processing': 'Processamento articoli',
+            'extracting': 'Estrazione contenuto',
+            'rewriting': 'Riscrittura con AI',
+            'completed': 'Completato'
+        };
+
+        const stepName = stepNames[status.current_step] || status.current_step || 'In corso...';
+        const total = status.total_candidates || 1;
+        const processed = status.processed || 0;
+        const pct = Math.min(100, Math.round((processed / total) * 100));
+
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('progressPct').textContent = pct + '%';
+
+        let stepText = stepName;
+        if (status.current_article && status.status === 'running') {
+            stepText += ` \u2014 Articolo ${status.current_article.number}/${status.current_article.total}`;
+        }
+        document.getElementById('progressStep').textContent = stepText;
+
+        const logDiv = document.getElementById('progressLog');
+        if (status.messages && status.messages.length > 0) {
+            logDiv.innerHTML = status.messages.map(msg => {
+                const time = new Date(msg.timestamp).toLocaleTimeString('it-IT');
+                let color = '#e2e8f0';
+                if (msg.message.includes('\u2705') || msg.message.includes('completat')) color = '#34d399';
+                else if (msg.message.includes('\u26A0') || msg.message.includes('non disponibile')) color = '#fbbf24';
+                else if (msg.message.includes('\u274C') || msg.message.includes('Errore')) color = '#f87171';
+                return `<div style="margin-bottom:0.15rem;color:${color};"><span style="color:#64748b;">[${time}]</span> ${msg.message}</div>`;
+            }).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        if (status.status === 'completed') {
+            const btn = document.getElementById('extractBtn');
+            btn.disabled = false;
+            btn.textContent = 'Estrai Articoli';
+            toast(`Completato: ${status.created || 0} creati, ${status.skipped || 0} saltati`, 'success');
+            setTimeout(() => panel.classList.remove('visible'), 8000);
+        }
+    }
+
+    /* ────────── Monitor ────────── */
+    let monitorStatusInterval = null;
+
+    async function toggleMonitor() {
+        const btn = document.getElementById('monitorBtn');
+        try {
+            const statusRes = await fetch('/api/monitor/status');
+            const status = await statusRes.json();
+
+            if (status.running) {
+                const res = await fetch('/api/monitor/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                if (res.ok) {
+                    btn.textContent = 'Monitoraggio';
+                    btn.className = 'btn btn-warning btn-sm';
+                    document.getElementById('monitorBanner').classList.remove('visible');
+                    if (monitorStatusInterval) { clearInterval(monitorStatusInterval); monitorStatusInterval = null; }
+                    toast('Monitoraggio fermato', 'info');
+                }
+            } else {
+                openModal({
+                    title: 'Avvia Monitoraggio',
+                    desc: 'Intervallo tra un controllo e l\'altro (in secondi):',
+                    inputLabel: 'Secondi',
+                    inputDefault: '300',
+                    confirmText: 'Avvia',
+                    onConfirm: async (val) => {
+                        const interval = parseInt(val) || 300;
+                        const res = await fetch('/api/monitor/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ poll_interval: interval })
+                        });
+                        if (res.ok) {
+                            btn.textContent = 'Ferma Monitor';
+                            btn.className = 'btn btn-danger btn-sm';
+                            updateMonitorBanner();
+                            monitorStatusInterval = setInterval(updateMonitorBanner, 5000);
+                            toast(`Monitoraggio avviato (ogni ${interval}s)`, 'success');
                         }
-                        monitorStatusInterval = setInterval(updateMonitorStatus, 5000);
-                    } else {
-                        alert(`Errore: ${data.error || 'Errore sconosciuto'}`);
                     }
-                }
-            } catch (error) {
-                alert(`Errore: ${error.message}`);
+                });
             }
-        }
-        
-        async function updateMonitorStatus() {
-            const statusDiv = document.getElementById('monitorStatus');
-            
-            try {
-                const response = await fetch('/api/monitor/status');
-                const status = await response.json();
-                
-                if (status.running) {
-                    const lastCheck = status.last_check ? new Date(status.last_check).toLocaleTimeString('it-IT') : 'Mai';
-                    const pollInterval = status.poll_interval || 300;
-                    const nextCheck = status.last_check ? 
-                        new Date(new Date(status.last_check).getTime() + pollInterval * 1000).toLocaleTimeString('it-IT') : 
-                        'Prossimamente';
-                    
-                    statusDiv.innerHTML = `
-                        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3 style="margin: 0; color: #1f2937;">🔄 Monitoraggio Continuo Attivo</h3>
-                                <span style="background: #10b981; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">ATTIVO</span>
-                            </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                                <div>
-                                    <div style="color: #6b7280; font-size: 0.85rem;">Ultimo controllo</div>
-                                    <div style="font-weight: 600; color: #1f2937;">${lastCheck}</div>
-                                </div>
-                                <div>
-                                    <div style="color: #6b7280; font-size: 0.85rem;">Prossimo controllo</div>
-                                    <div style="font-weight: 600; color: #1f2937;">${nextCheck}</div>
-                                </div>
-                                <div>
-                                    <div style="color: #6b7280; font-size: 0.85rem;">Controlli totali</div>
-                                    <div style="font-weight: 600; color: #1f2937;">${status.total_checks || 0}</div>
-                                </div>
-                                <div>
-                                    <div style="color: #6b7280; font-size: 0.85rem;">Articoli processati</div>
-                                    <div style="font-weight: 600; color: #1f2937;">${status.total_articles_processed || 0}</div>
-                                </div>
-                            </div>
-                            ${status.last_articles && status.last_articles.length > 0 ? `
-                                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
-                                    <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 0.5rem;">Ultimi articoli processati:</div>
-                                    <div style="max-height: 150px; overflow-y: auto;">
-                                        ${status.last_articles.slice(0, 5).map(article => `
-                                            <div style="padding: 0.5rem; background: #f3f4f6; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.85rem;">
-                                                <div style="font-weight: 600; color: #1f2937;">${article.title || 'Nessun titolo'}</div>
-                                                <div style="color: #6b7280; font-size: 0.75rem; margin-top: 0.25rem;">
-                                                    ${article.source || 'Unknown'} • ${new Date(article.processed_at).toLocaleString('it-IT')}
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                } else {
-                    statusDiv.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Errore aggiornamento stato monitor:', error);
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function updateMonitorBanner() {
+        const banner = document.getElementById('monitorBanner');
+        try {
+            const res = await fetch('/api/monitor/status');
+            const status = await res.json();
+
+            if (status.running) {
+                const last = status.last_check ? new Date(status.last_check).toLocaleTimeString('it-IT') : 'Mai';
+                const pollI = status.poll_interval || 300;
+                const next = status.last_check
+                    ? new Date(new Date(status.last_check).getTime() + pollI * 1000).toLocaleTimeString('it-IT')
+                    : 'Prossimamente';
+
+                banner.classList.add('visible');
+                banner.innerHTML = `
+                    <div class="monitor-banner-header">
+                        <span class="monitor-banner-title">Monitoraggio Continuo</span>
+                        <span class="monitor-badge">Attivo</span>
+                    </div>
+                    <div class="monitor-stats">
+                        <div><div class="monitor-stat-label">Ultimo controllo</div><div class="monitor-stat-value">${last}</div></div>
+                        <div><div class="monitor-stat-label">Prossimo</div><div class="monitor-stat-value">${next}</div></div>
+                        <div><div class="monitor-stat-label">Controlli</div><div class="monitor-stat-value">${status.total_checks || 0}</div></div>
+                        <div><div class="monitor-stat-label">Processati</div><div class="monitor-stat-value">${status.total_articles_processed || 0}</div></div>
+                    </div>`;
+            } else {
+                banner.classList.remove('visible');
             }
+        } catch (e) { console.error(e); }
+    }
+
+    /* ────────── Article Actions ────────── */
+    async function rewriteArticle(url, button) {
+        button.disabled = true;
+        const orig = button.textContent;
+        button.textContent = 'Riscrittura...';
+
+        try {
+            const res = await fetch('/api/rewrite-article', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Errore');
+
+            toast('Articolo riscritto con successo', 'success');
+            await loadArticles();
+        } catch (e) {
+            toast(e.message, 'error');
+            button.disabled = false;
+            button.textContent = orig;
         }
-        
-        // Controlla stato monitor al caricamento
-        window.addEventListener('load', async () => {
-            try {
-                const response = await fetch('/api/monitor/status');
-                const status = await response.json();
-                
+    }
+
+    async function deleteArticle(url, button) {
+        openModal({
+            title: 'Elimina Articolo',
+            desc: 'Sei sicuro? L\'articolo verra salvato nel database prima dell\'eliminazione.',
+            confirmText: 'Elimina',
+            danger: true,
+            onConfirm: async () => {
+                button.disabled = true;
+                button.textContent = 'Eliminazione...';
+
+                try {
+                    const res = await fetch('/api/delete-article', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Errore');
+
+                    const card = button.closest('.article-card');
+                    if (card) {
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        card.style.transition = 'all 0.3s ease';
+                    }
+                    toast('Articolo eliminato', 'success');
+                    setTimeout(() => loadArticles(), 350);
+                } catch (e) {
+                    toast(e.message, 'error');
+                    button.disabled = false;
+                    button.textContent = 'Elimina';
+                }
+            }
+        });
+    }
+
+    /* ────────── Init ────────── */
+    window.addEventListener('DOMContentLoaded', () => {
+        loadData();
+        loadCandidates(false);
+
+        fetch('/api/pipeline-status')
+            .then(r => r.json())
+            .then(status => {
+                if (status.status === 'running') startStatusPolling();
+            });
+
+        fetch('/api/monitor/status')
+            .then(r => r.json())
+            .then(status => {
                 if (status.running) {
                     const btn = document.getElementById('monitorBtn');
-                    btn.textContent = '⏸️ Ferma Monitoraggio';
-                    btn.style.background = '#ef4444';
-                    document.getElementById('monitorStatus').style.display = 'block';
-                    updateMonitorStatus();
-                    monitorStatusInterval = setInterval(updateMonitorStatus, 5000);
+                    btn.textContent = 'Ferma Monitor';
+                    btn.className = 'btn btn-danger btn-sm';
+                    updateMonitorBanner();
+                    monitorStatusInterval = setInterval(updateMonitorBanner, 5000);
                 }
-            } catch (error) {
-                console.error('Errore controllo stato monitor:', error);
-            }
-        });
-
-        // Funzione per eliminare un articolo
-        async function deleteArticle(url, button) {
-            if (!confirm('Sei sicuro di voler eliminare questo articolo? L\'articolo verrà salvato nel database.')) {
-                return;
-            }
-            
-            const originalText = button.textContent;
-            const articleCard = button.closest('.article-card');
-            
-            button.disabled = true;
-            button.textContent = '⏳ Eliminazione...';
-            button.style.background = '#9ca3af';
-            
-            try {
-                const response = await fetch('/api/delete-article', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ url: url })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Errore nell\'eliminazione');
-                }
-                
-                // Successo - anima rimozione
-                articleCard.style.opacity = '0.5';
-                articleCard.style.transition = 'opacity 0.3s';
-                
-                setTimeout(() => {
-                    loadArticles(); // Ricarica lista
-                }, 300);
-                
-            } catch (error) {
-                button.disabled = false;
-                button.textContent = originalText;
-                button.style.background = '#ef4444';
-                alert(`Errore: ${error.message}`);
-            }
-        }
-
-        // Polling dello stato pipeline
-        let statusPollingInterval = null;
-        
-        function startStatusPolling() {
-            // Ferma polling esistente se presente
-            if (statusPollingInterval) {
-                clearInterval(statusPollingInterval);
-            }
-            
-            // Poll ogni 2 secondi
-            statusPollingInterval = setInterval(async () => {
-                try {
-                    const response = await fetch('/api/pipeline-status');
-                    const status = await response.json();
-                    
-                    updatePipelineStatus(status);
-                    
-                    // Se completata, ferma polling dopo 5 secondi
-                    if (status.status === 'completed') {
-                        setTimeout(() => {
-                            if (statusPollingInterval) {
-                                clearInterval(statusPollingInterval);
-                                statusPollingInterval = null;
-                            }
-                            // Ricarica articoli
-                            loadArticles();
-                        }, 5000);
-                    }
-                } catch (error) {
-                    console.error('Errore polling status:', error);
-                }
-            }, 2000);
-        }
-        
-        function updatePipelineStatus(status) {
-            const pipelineStatusDiv = document.getElementById('pipelineStatus');
-            const progressBarDiv = document.getElementById('progressBar');
-            
-            if (status.status === 'idle') {
-                pipelineStatusDiv.style.display = 'none';
-                progressBarDiv.style.display = 'none';
-                return;
-            }
-            
-            // Mostra barra di progresso
-            progressBarDiv.style.display = 'block';
-            
-            const stepNames = {
-                'fetching': '📡 Raccolta URL da feed RSS',
-                'processing': '⚙️ Processamento articoli',
-                'extracting': '📄 Estrazione contenuto',
-                'rewriting': '✨ Riscrittura con AI',
-                'completed': '✅ Completato!'
-            };
-            
-            const stepName = stepNames[status.current_step] || status.current_step || 'In corso...';
-            const currentArticle = status.current_article;
-            
-            // Calcola percentuale
-            const total = status.total_candidates || 1;
-            const processed = status.processed || 0;
-            const percent = Math.min(100, Math.round((processed / total) * 100));
-            
-            // Aggiorna barra di progresso
-            document.getElementById('progressBarFill').style.width = percent + '%';
-            document.getElementById('progressPercent').textContent = percent + '%';
-            
-            // Aggiorna step corrente
-            let stepText = stepName;
-            if (currentArticle && status.status === 'running') {
-                stepText += ` - Articolo ${currentArticle.number}/${currentArticle.total}`;
-            }
-            document.getElementById('currentStep').innerHTML = `<strong style="color: #667eea;">${stepText}</strong>`;
-            
-            // Aggiorna log
-            const logDiv = document.getElementById('progressLog');
-            if (status.messages && status.messages.length > 0) {
-                logDiv.innerHTML = status.messages.map(msg => {
-                    const time = new Date(msg.timestamp).toLocaleTimeString('it-IT');
-                    let icon = '📡';
-                    let color = '#e5e7eb';
-                    
-                    // Determina icona e colore in base al messaggio
-                    if (msg.message.includes('✅')) {
-                        icon = '✅';
-                        color = '#10b981';
-                    } else if (msg.message.includes('⚠️') || msg.message.includes('non disponibile')) {
-                        icon = '⚠️';
-                        color = '#f59e0b';
-                    } else if (msg.message.includes('❌') || msg.message.includes('Errore')) {
-                        icon = '❌';
-                        color = '#ef4444';
-                    } else if (msg.step === 'processing') {
-                        icon = '⚙️';
-                    } else if (msg.step === 'extracting') {
-                        icon = '📄';
-                    } else if (msg.step === 'rewriting') {
-                        icon = '✨';
-                    }
-                    
-                    return `<div style="margin-bottom: 0.25rem; color: ${color};"><span style="color: #9ca3af;">[${time}]</span> ${icon} ${msg.message}</div>`;
-                }).join('');
-                // Scroll to bottom
-                logDiv.parentElement.scrollTop = logDiv.parentElement.scrollHeight;
-            }
-            
-            // Box status compatto (mantenuto per retrocompatibilità)
-            let content = `
-                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 6px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="color: #92400e;">${stepName}</strong>
-                        <span style="font-size: 0.85rem; color: #78350f;">${processed}/${total} articoli (${percent}%)</span>
-                    </div>
-            `;
-            
-            if (status.status === 'completed') {
-                content += `
-                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #fde68a;">
-                        <div style="color: #065f46;">
-                            <strong>✅ Completato!</strong>
-                            <div style="margin-top: 0.5rem; font-size: 0.9rem;">
-                                Processati: ${status.processed || 0} | 
-                                Creati: ${status.created || 0} | 
-                                Saltati: ${status.skipped || 0} | 
-                                Falliti: ${status.failed || 0}
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Riabilita pulsante
-                const btn = document.getElementById('extractBtn');
-                btn.disabled = false;
-                btn.textContent = '📰 Estrai Nuovi Articoli';
-                btn.style.background = '#10b981';
-                
-                // Nascondi barra dopo 10 secondi
-                setTimeout(() => {
-                    progressBarDiv.style.display = 'none';
-                }, 10000);
-            }
-            
-            content += '</div>';
-            pipelineStatusDiv.innerHTML = content;
-        }
-
-        // Carica dati al caricamento pagina
-        window.addEventListener('DOMContentLoaded', () => {
-            loadData();
-            // Controlla se c'è una pipeline in esecuzione
-            fetch('/api/pipeline-status')
-                .then(r => r.json())
-                .then(status => {
-                    if (status.status === 'running') {
-                        document.getElementById('pipelineStatus').style.display = 'block';
-                        startStatusPolling();
-                    }
-                });
-        });
+            })
+            .catch(() => {});
+    });
     </script>
 </body>
 </html>
