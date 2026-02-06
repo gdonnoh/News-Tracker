@@ -4,6 +4,7 @@ Centralizes path handling, date parsing, database access, and URL hashing.
 """
 
 import os
+import errno
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -42,8 +43,17 @@ def get_data_dir() -> Path:
         data_dir = Path("/tmp")
     else:
         data_dir = get_base_dir() / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir
+
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return data_dir
+    except OSError as e:
+        # Fallback for read-only filesystems (e.g., /var/task on Vercel)
+        if e.errno == errno.EROFS:
+            fallback = Path("/tmp")
+            fallback.mkdir(parents=True, exist_ok=True)
+            return fallback
+        raise
 
 
 def get_cache_dir() -> Path:
