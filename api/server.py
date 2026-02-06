@@ -35,7 +35,8 @@ from src.utils import (
 # App setup
 # ---------------------------------------------------------------------------
 
-app = Flask(__name__, static_folder=".")
+FRONTEND_DIR = BASE_DIR / "frontend"
+app = Flask(__name__, static_folder=str(FRONTEND_DIR))
 CORS(app)
 
 CACHE_DIR = get_cache_dir()
@@ -99,12 +100,12 @@ def _error_response(message: str, status_code: int = 500):
 
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(str(FRONTEND_DIR), "index.html")
 
 
 @app.route("/article.html")
 def article_page():
-    return send_from_directory(".", "article.html")
+    return send_from_directory(str(FRONTEND_DIR), "article.html")
 
 
 # ---------------------------------------------------------------------------
