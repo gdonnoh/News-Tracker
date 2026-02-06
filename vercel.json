@@ -9,11 +9,5 @@
   "env": {
     "PYTHON_VERSION": "3.11",
     "VERCEL": "1"
-  },
-  "functions": {
-    "api/server.py": {
-      "maxDuration": 30,
-      "memory": 2048
-    }
   }
 }
