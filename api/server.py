@@ -696,13 +696,8 @@ def test_email():
 
 
 # ---------------------------------------------------------------------------
-# Vercel handler & local startup
+# Local startup
 # ---------------------------------------------------------------------------
-
-def handler(request):
-    """Vercel serverless handler."""
-    return app(request.environ, lambda status, headers: None)
-
 
 if __name__ == "__main__":
     print("Starting News Tracker server...")
