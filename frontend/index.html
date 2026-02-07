@@ -992,6 +992,35 @@
         }
 
         .article-card-no-img svg { opacity: 0.3; }
+
+        /* ─── Date Group Headers ─── */
+        .articles-date-header {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0 0.25rem;
+            margin-top: 0.5rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .articles-date-header:first-child { margin-top: 0; }
+
+        .articles-date-label {
+            font-family: "Newsreader", Georgia, serif;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .articles-date-count {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--ink-muted);
+            background: var(--bg-subtle);
+            padding: 0.15rem 0.6rem;
+            border-radius: 999px;
+        }
     </style>
 </head>
 <body>
@@ -1229,6 +1258,27 @@
         document.getElementById('articlesBadge').textContent = articles.length;
     }
 
+    function getArticleDate(article) {
+        const raw = article.processed_at || article.published_at;
+        if (!raw) return null;
+        try { return new Date(raw); } catch { return null; }
+    }
+
+    function getDateKey(d) {
+        if (!d || isNaN(d)) return 'unknown';
+        return d.toISOString().split('T')[0];
+    }
+
+    function formatDateHeader(d) {
+        if (!d || isNaN(d)) return 'Data sconosciuta';
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (d.toDateString() === today.toDateString()) return 'Oggi';
+        if (d.toDateString() === yesterday.toDateString()) return 'Ieri';
+        return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
     function renderArticles(articles) {
         const grid = document.getElementById('articlesGrid');
         const paginationDiv = document.getElementById('articlesPagination');
@@ -1249,7 +1299,25 @@
 
         const pageArticles = articles.slice((articlePage - 1) * ARTICLES_PER_PAGE, articlePage * ARTICLES_PER_PAGE);
 
-        grid.innerHTML = pageArticles.map(article => {
+        // Group by extraction/publication date
+        const dateGroups = {};
+        const dateOrder = [];
+        for (const article of pageArticles) {
+            const d = getArticleDate(article);
+            const key = getDateKey(d);
+            if (!dateGroups[key]) {
+                dateGroups[key] = { date: d, articles: [] };
+                dateOrder.push(key);
+            }
+            dateGroups[key].articles.push(article);
+        }
+
+        grid.innerHTML = dateOrder.map(key => {
+            const group = dateGroups[key];
+            const label = formatDateHeader(group.date);
+            const count = group.articles.length;
+            const headerHTML = `<div class="articles-date-header"><span class="articles-date-label">${label}</span><span class="articles-date-count">${count} articol${count === 1 ? 'o' : 'i'}</span></div>`;
+            return headerHTML + group.articles.map(article => {
             const hasRewritten = article.has_rewritten || false;
             const rewritten = article.rewritten || {};
             const qg = article.quality_gate || {};
@@ -1324,6 +1392,7 @@
                         <div class="article-card-actions">${actionsHTML}</div>
                     </div>
                 </div>`;
+            }).join('');
         }).join('');
 
         if (paginationDiv) paginationDiv.innerHTML = buildPaginationHTML(articlePage, totalPages, 'goToArticlePage', articles.length);
