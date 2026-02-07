@@ -68,29 +68,39 @@ class ArticleRewriter:
             target_min = max(180, int(word_count * 0.7))
             target_max = max(300, int(word_count * 1.3))
 
-        return f"""Sei un giornalista professionista. Devi riscrivere questo articolo in modo originale e professionale, mantenendo ESATTAMENTE i fatti verificabili.
+        return f"""Sei un giornalista esperto di testate digitali ad alto traffico. Devi riscrivere questo articolo in modo originale, mantenendo i fatti verificabili ma con un TITOLO CHE SPACCA — il titolo è la cosa più importante.
 
 ISTRUZIONI CHIAVE:
 
-1. **CAMBIAMENTO STRUTTURALE:**
+1. **TITOLO (HEADLINE) — PRIORITÀ MASSIMA:**
+   - Il titolo DEVE fermare lo scroll e spingere al click
+   - Usa tecniche giornalistiche potenti: suspense, contrasto, rivelazione, urgenza, emozione
+   - Esempi di pattern efficaci:
+     • "Ecco cosa cambia davvero per..." (curiosità)
+     • "La verità su X che nessuno racconta" (rivelazione)
+     • "X: il retroscena che ribalta tutto" (suspense)
+     • "Perché X potrebbe cambiare tutto" (implicazione)
+     • Numeri specifici catturano: "3 motivi per cui...", "Il dato che spaventa..."
+   - VIETATO: titoli piatti, descrittivi o burocratici
+   - Il titolo deve creare un "gap di curiosità" — il lettore DEVE voler cliccare
+   - Max 90 caratteri, ma meglio breve e incisivo
+
+2. **CAMBIAMENTO STRUTTURALE:**
    - Riorganizza l'ordine delle informazioni
    - Usa una struttura tematica con sottotitoli
    - Evita di replicare la stessa sequenza dei paragrafi originali
 
-2. **RIFORMULAZIONE:**
-   - NON copiare frasi
+3. **RIFORMULAZIONE:**
+   - NON copiare frasi dall'originale
    - Usa sinonimi e perifrasi
    - Cambia attivo/passivo e costruzioni grammaticali
    - Riscrivi ogni concetto con parole diverse
 
-3. **PROSPETTIVA E CONTESTO:**
-   - Introduci contesto o implicazioni se gia presenti nel testo
-   - Mantieni tono informativo, senza opinioni nuove
-
 4. **STILE E TONO:**
-   - Informativo e professionale
-   - Frasi di lunghezza variabile
-   - Niente enfasi sensazionalistiche
+   - Incisivo, diretto, coinvolgente
+   - Il lead deve agganciare subito il lettore
+   - Frasi di lunghezza variabile, ritmo dinamico
+   - Puoi usare enfasi dove i fatti lo giustificano
 
 5. **CONTENUTO E FATTI:**
    - USA SOLO fatti presenti nell'articolo originale
@@ -99,14 +109,13 @@ ISTRUZIONI CHIAVE:
    - Se un'informazione manca, omettila
 
 6. **STRUTTURA OUTPUT:**
-   - Lead: 2-3 frasi che catturano l'essenza con approccio diverso
-   - Corpo: paragrafi tematici con sottotitoli (##)
-   - Evita ripetizioni e liste eccessive
-   - Lunghezza target: {target_min}-{target_max} parole (adatta alla fonte)
+   - Lead: 2-3 frasi che agganciano il lettore con un angolo forte
+   - Corpo: paragrafi tematici con sottotitoli (##) accattivanti
+   - Lunghezza target: {target_min}-{target_max} parole
 
 7. **QUALITÀ:**
    - Il testo deve risultare scritto da zero
-   - Coerenza logica e chiarezza informativa
+   - Il titolo deve essere il più forte e accattivante possibile
 
 ARTICOLO ORIGINALE (usa solo come fonte di fatti, NON come modello di scrittura):
 Titolo: {title}
@@ -118,13 +127,13 @@ Testo originale:
 
 Rispondi SOLO con un JSON valido (nessun testo aggiuntivo):
 {{
-  "headline": "Titolo completamente nuovo e originale (max 100 caratteri, NON simile all'originale)",
-  "lead": "2-3 frasi di introduzione con approccio diverso dall'originale",
-  "body_markdown": "Corpo riscritto in Markdown con struttura completamente diversa, paragrafi tematici e sottotitoli (##). Ogni frase deve essere riscritta da zero.",
+  "headline": "TITOLO POTENTE che crea curiosità e spinge al click (max 90 char). NO titoli piatti.",
+  "lead": "2-3 frasi di apertura che agganciano il lettore — angolo forte, ritmo incisivo",
+  "body_markdown": "Corpo riscritto in Markdown con struttura diversa, sottotitoli (##) accattivanti. Ogni frase riscritta da zero.",
   "tags": ["tag1", "tag2", "tag3"],
   "category": "categoria principale (tecnologia, politica, economia, sport, cultura, salute, cronaca)",
-  "meta_title": "Titolo SEO originale (max 60 caratteri)",
-  "meta_description": "Descrizione SEO originale (max 160 caratteri)"
+  "meta_title": "Titolo SEO accattivante (max 60 caratteri)",
+  "meta_description": "Descrizione SEO che invoglia al click (max 160 caratteri)"
 }}
 """
 
