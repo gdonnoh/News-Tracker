@@ -32,7 +32,11 @@ class ArticleExtractor:
         save_extracted_json: bool = True,
     ):
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.cache_dir = Path("/tmp/cache")
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.rate_limit_delay = rate_limit_delay
         self.save_raw_html = save_raw_html

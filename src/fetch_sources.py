@@ -31,7 +31,11 @@ class SourceFetcher:
     ):
         self.sources_config = sources_config
         self.dedupe_db_path = Path(dedupe_db_path)
-        self.dedupe_db_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.dedupe_db_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.dedupe_db_path = Path("/tmp") / self.dedupe_db_path.name
+            self.dedupe_db_path.parent.mkdir(parents=True, exist_ok=True)
         self.rate_limit_delay = rate_limit_delay
         self.timeout = timeout
 

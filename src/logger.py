@@ -16,7 +16,11 @@ class AuditLogger:
     
     def __init__(self, log_dir: str = "./data/logs", log_level: str = "INFO"):
         self.log_dir = Path(log_dir)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.log_dir = Path("/tmp/logs")
+            self.log_dir.mkdir(parents=True, exist_ok=True)
         
         # Setup logging standard Python
         self.logger = logging.getLogger("news_pipeline")
@@ -134,10 +138,14 @@ _logger_instance: Optional[AuditLogger] = None
 def get_logger(log_dir: str = None, log_level: str = None) -> AuditLogger:
     """Ottieni istanza singleton del logger."""
     global _logger_instance
-    
+
     if _logger_instance is None:
-        log_dir = log_dir or os.getenv("LOG_DIR", "./data/logs")
+        if log_dir is None:
+            log_dir = os.getenv("LOG_DIR")
+            if not log_dir:
+                from src.utils import get_logs_dir
+                log_dir = str(get_logs_dir())
         log_level = log_level or os.getenv("LOG_LEVEL", "INFO")
         _logger_instance = AuditLogger(log_dir=log_dir, log_level=log_level)
-    
+
     return _logger_instance
