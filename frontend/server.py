@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import requests
+
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -238,27 +240,24 @@ def get_candidates():
 def _refresh_candidates():
     """Fetch all RSS feeds and store candidates in the database."""
     import yaml
-    from src.fetch_sources import SourceFetcher
 
     config_path = BASE_DIR / "config" / "sources.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         sources_config = yaml.safe_load(f) or {}
 
-    delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
-    dl_timeout = sources_config.get("timeouts", {}).get("download", 30)
     if is_vercel():
-        delay = 0
-        dl_timeout = 3
-    fetcher = SourceFetcher(
-        sources_config=sources_config,
-        dedupe_db_path=str(DEDUPE_DB),
-        rate_limit_delay=delay,
-        timeout=dl_timeout,
-    )
+        all_candidates = _fetch_feeds_parallel(sources_config)
+    else:
+        from src.fetch_sources import SourceFetcher
+        fetcher = SourceFetcher(
+            sources_config=sources_config,
+            dedupe_db_path=str(DEDUPE_DB),
+            rate_limit_delay=sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0),
+            timeout=sources_config.get("timeouts", {}).get("download", 30),
+        )
+        all_candidates = fetcher.fetch_all(limit=None)
 
-    all_candidates = fetcher.fetch_all(limit=None)
     now = datetime.now().isoformat()
-
     p = ph()
     with db_connection(DEDUPE_DB) as conn:
         conn.execute("DELETE FROM candidates")
@@ -275,6 +274,57 @@ def _refresh_candidates():
                 c.get("source", "Unknown"),
                 now, now,
             ))
+
+
+def _fetch_feeds_parallel(sources_config):
+    """Fetch all RSS feeds in parallel (for Vercel's 10s limit)."""
+    import feedparser as fp
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    feeds = sources_config.get("rss_feeds", [])
+    enabled = [f for f in feeds if f.get("enabled", True)]
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; NewsPipeline/1.0)"})
+
+    def fetch_one(feed_cfg):
+        name = feed_cfg.get("name", feed_cfg["url"])
+        try:
+            resp = session.get(feed_cfg["url"], timeout=4)
+            resp.raise_for_status()
+            parsed = fp.parse(resp.content)
+            results = []
+            for entry in parsed.entries:
+                url = entry.get("link", "")
+                if not url:
+                    continue
+                pub_str = None
+                if hasattr(entry, "published_parsed") and entry.published_parsed:
+                    from datetime import datetime as dt
+                    pub_str = dt(*entry.published_parsed[:6]).isoformat()
+                elif hasattr(entry, "published") and entry.published:
+                    pub_str = entry.published
+                results.append({
+                    "url": url,
+                    "source": name,
+                    "published_at": pub_str,
+                    "title": entry.get("title", ""),
+                    "description": entry.get("description", ""),
+                })
+            return results
+        except Exception:
+            return []
+
+    all_candidates = []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {executor.submit(fetch_one, f): f for f in enabled}
+        for future in as_completed(futures, timeout=8):
+            try:
+                all_candidates.extend(future.result())
+            except Exception:
+                pass
+
+    all_candidates.sort(key=lambda x: x.get("published_at") or "", reverse=True)
+    return all_candidates
 
 
 @app.route("/api/candidates/refresh-stream")
