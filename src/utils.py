@@ -182,26 +182,49 @@ def ph() -> str:
     return "%s" if is_postgres() else "?"
 
 
+class _PgCursor:
+    """Wrapper around psycopg2 cursor that makes execute() chainable like SQLite."""
+
+    def __init__(self, cursor):
+        self._cur = cursor
+
+    def execute(self, *args, **kwargs):
+        self._cur.execute(*args, **kwargs)
+        return self  # Allow .execute(...).fetchall() chaining
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def close(self):
+        self._cur.close()
+
+
 @contextmanager
 def db_connection(db_path: Optional[Path] = None, timeout: float = 10.0):
     """
     Context manager for database connections.
     Uses PostgreSQL when POSTGRES_URL/DATABASE_URL is set, else SQLite.
+    Yields a cursor-like object that supports execute/fetchone/fetchall.
 
     Usage:
-        with db_connection() as conn:
-            conn.execute(f"SELECT * FROM t WHERE id = {ph()}", (value,))
+        with db_connection() as db:
+            db.execute(f"SELECT * FROM t WHERE id = {ph()}", (value,))
     """
     if is_postgres():
         import psycopg2
         conn = psycopg2.connect(_get_pg_url(), connect_timeout=int(timeout))
+        cur = _PgCursor(conn.cursor())
         try:
-            yield conn
+            yield cur
             conn.commit()
         except Exception:
             conn.rollback()
             raise
         finally:
+            cur.close()
             conn.close()
     else:
         if db_path is None:
