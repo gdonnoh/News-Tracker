@@ -1622,9 +1622,24 @@
 
     async function loadCandidates(refresh = false) {
         try {
+            let data;
+            if (refresh && location.hostname.includes('vercel.app')) {
+                // On Vercel, refreshFeedsFallback handles everything
+                return refreshFeedsFallback(document.getElementById('refreshFeedBtn'));
+            }
+
+            // Try DB first
             const url = refresh ? '/api/candidates?refresh=true' : '/api/candidates';
             const response = await fetch(url);
-            const data = await response.json();
+            data = await response.json();
+
+            // If DB is empty on Vercel, try localStorage cache
+            if (!refresh && data.success && data.total === 0 && location.hostname.includes('vercel.app')) {
+                try {
+                    const cached = localStorage.getItem('nt_candidates');
+                    if (cached) data = JSON.parse(cached);
+                } catch(e) {}
+            }
 
             if (!data.success) throw new Error(data.error || 'Errore');
 
@@ -2206,28 +2221,63 @@
         btn.disabled = true;
         btn.textContent = 'Aggiornamento...';
         try {
-            // Batch 0: clears old candidates and fetches first batch
-            const r0 = await fetch('/api/candidates?refresh=true&batch=0');
+            // Step 1: Fetch feeds in batches (lightweight, no DB)
+            const r0 = await fetch('/api/feeds/fetch?batch=0');
             const d0 = await r0.json();
             if (!d0.success) throw new Error(d0.error || 'Errore');
 
             const totalBatches = d0.total_batches || 1;
-            btn.textContent = `Batch 1/${totalBatches}...`;
+            let allCandidates = [...(d0.candidates || [])];
+            btn.textContent = `Feed 1/${totalBatches}...`;
 
             // Remaining batches
             for (let b = 1; b < totalBatches; b++) {
-                btn.textContent = `Batch ${b + 1}/${totalBatches}...`;
-                const r = await fetch(`/api/candidates?refresh=true&batch=${b}`);
+                btn.textContent = `Feed ${b + 1}/${totalBatches}...`;
+                const r = await fetch(`/api/feeds/fetch?batch=${b}`);
                 const d = await r.json();
-                if (!d.success) throw new Error(d.error || 'Errore batch ' + b);
+                if (d.success && d.candidates) {
+                    allCandidates = allCandidates.concat(d.candidates);
+                }
             }
 
-            // Load final combined results
-            await loadCandidates(false);
-            toast('Feed aggiornati', 'success');
+            // Step 2: Build by_source structure and cache in localStorage
+            const bySource = {};
+            for (const c of allCandidates) {
+                const src = c.source || 'Unknown';
+                if (!bySource[src]) bySource[src] = [];
+                bySource[src].push(c);
+            }
+            for (const articles of Object.values(bySource)) {
+                articles.sort((a, b) => (b.published_at || '').localeCompare(a.published_at || ''));
+            }
+            const result = { success: true, total: allCandidates.length, by_source: bySource, sources: Object.keys(bySource) };
+
+            // Cache in localStorage for persistence across page refreshes
+            try { localStorage.setItem('nt_candidates', JSON.stringify(result)); } catch(e) {}
+
+            // Step 3: Display results
+            allCandidatesData = result;
+            const badge = document.getElementById('candidatesBadge');
+            if (badge) badge.textContent = result.total;
+            const pillsDiv = document.getElementById('sourcePills');
+            let pillsHTML = `<button class="source-pill active" onclick="switchSource('all', this)">Tutti (${result.total})</button>`;
+            for (const source of result.sources) {
+                const count = result.by_source[source].length;
+                pillsHTML += `<button class="source-pill" onclick="switchSource('${source.replace(/'/g, "\\'")}', this)">${source} (${count})</button>`;
+            }
+            pillsDiv.innerHTML = pillsHTML;
+            switchSource('all');
+
+            // Step 4: Try to persist to DB in background (best-effort)
+            btn.textContent = 'Salvataggio...';
+            fetch('/api/candidates/store', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({candidates: allCandidates, clear: true}),
+            }).catch(() => {});
+
+            toast(`Feed aggiornati: ${allCandidates.length} candidati`, 'success');
         } catch (e) {
-            // Still try to load whatever was saved
-            await loadCandidates(false).catch(() => {});
             toast('Errore aggiornamento feed: ' + e.message, 'error');
         } finally {
             btn.disabled = false;

@@ -356,6 +356,73 @@ def _fetch_feeds_parallel(sources_config, batch=0):
     return all_candidates
 
 
+@app.route("/api/feeds/fetch")
+def fetch_feeds_only():
+    """Lightweight endpoint: fetch RSS feeds without DB.
+
+    Returns parsed candidates as JSON. Used by the frontend on Vercel
+    where the 10s function limit makes DB operations risky.
+    Query params:
+        batch (int): which batch of feeds to fetch (default 0)
+    """
+    import math
+    import yaml
+
+    config_path = BASE_DIR / "config" / "sources.yaml"
+    with open(config_path, "r", encoding="utf-8") as f:
+        sources_config = yaml.safe_load(f) or {}
+
+    batch = int(request.args.get("batch", "0"))
+    feeds = sources_config.get("rss_feeds", [])
+    n_enabled = len([f for f in feeds if f.get("enabled", True)])
+    total_batches = math.ceil(n_enabled / _VERCEL_BATCH_SIZE)
+
+    candidates = _fetch_feeds_parallel(sources_config, batch=batch)
+
+    return jsonify({
+        "success": True,
+        "candidates": candidates,
+        "batch": batch,
+        "total_batches": total_batches,
+    })
+
+
+@app.route("/api/candidates/store", methods=["POST"])
+def store_candidates():
+    """Store candidates in the database (separate from fetch for Vercel)."""
+    try:
+        _ensure_db()
+        data = request.get_json() or {}
+        candidates = data.get("candidates", [])
+        clear = data.get("clear", False)
+
+        now = datetime.now().isoformat()
+        p = ph()
+        conflict = "ON CONFLICT (url) DO NOTHING" if is_postgres() else "OR IGNORE"
+        with db_connection(DEDUPE_DB) as conn:
+            if clear:
+                conn.execute("DELETE FROM candidates")
+            for c in candidates:
+                conn.execute(f"""
+                    INSERT {'' if is_postgres() else conflict} INTO candidates
+                    (url, title, description, published_at, source, created_at, updated_at)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    {conflict if is_postgres() else ''}
+                """, (
+                    c.get("url"),
+                    c.get("title", ""),
+                    c.get("description", ""),
+                    normalize_date(c.get("published_at")),
+                    c.get("source", "Unknown"),
+                    now, now,
+                ))
+
+        return jsonify({"success": True, "stored": len(candidates)})
+    except Exception as e:
+        print(f"Store candidates error: {e}")
+        return _error_response(f"Store error: {e}")
+
+
 @app.route("/api/candidates/refresh-stream")
 def refresh_candidates_stream():
     """SSE endpoint for real-time feed refresh progress."""
