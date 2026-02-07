@@ -298,12 +298,12 @@ def refresh_candidates_stream():
 
             delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
             if is_vercel():
-                delay = min(delay, 0.5)  # Minimal delay on Vercel to fit within 60s timeout
+                delay = 0  # No delay on Vercel — must fit within 10s Hobby plan limit
             fetcher = SourceFetcher(
                 sources_config=sources_config,
                 dedupe_db_path=str(DEDUPE_DB),
                 rate_limit_delay=delay,
-                timeout=min(sources_config.get("timeouts", {}).get("download", 30), 8 if is_vercel() else 30),
+                timeout=min(sources_config.get("timeouts", {}).get("download", 30), 3 if is_vercel() else 30),
             )
             fetcher._load_processed_cache()
 

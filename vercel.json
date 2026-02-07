@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/server.py": {
-      "maxDuration": 60,
-      "memory": 512
-    }
-  },
   "routes": [
     {
       "src": "/api/candidates/refresh-stream",
