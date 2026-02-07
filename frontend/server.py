@@ -285,13 +285,14 @@ def _fetch_feeds_parallel(sources_config):
 
     feeds = sources_config.get("rss_feeds", [])
     enabled = [f for f in feeds if f.get("enabled", True)]
-    session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; NewsPipeline/1.0)"})
 
     def fetch_one(feed_cfg):
         name = feed_cfg.get("name", feed_cfg["url"])
         try:
-            resp = session.get(feed_cfg["url"], timeout=4)
+            resp = requests.get(
+                feed_cfg["url"], timeout=2,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; NewsPipeline/1.0)"},
+            )
             resp.raise_for_status()
             parsed = fp.parse(resp.content)
             results = []
@@ -301,8 +302,7 @@ def _fetch_feeds_parallel(sources_config):
                     continue
                 pub_str = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    from datetime import datetime as dt
-                    pub_str = dt(*entry.published_parsed[:6]).isoformat()
+                    pub_str = datetime(*entry.published_parsed[:6]).isoformat()
                 elif hasattr(entry, "published") and entry.published:
                     pub_str = entry.published
                 results.append({
@@ -317,9 +317,9 @@ def _fetch_feeds_parallel(sources_config):
             return []
 
     all_candidates = []
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {executor.submit(fetch_one, f): f for f in enabled}
-        for future in as_completed(futures, timeout=8):
+        for future in as_completed(futures, timeout=5):
             try:
                 all_candidates.extend(future.result())
             except Exception:
