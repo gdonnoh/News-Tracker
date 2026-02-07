@@ -17,7 +17,7 @@ except ImportError:
     SentenceTransformer = None
 
 from src.logger import get_logger
-from src.utils import db_connection
+from src.utils import db_connection, is_postgres, ph
 
 logger = get_logger()
 
@@ -62,6 +62,7 @@ class Deduplicator:
     # ------------------------------------------------------------------
 
     def _init_db(self):
+        blob_type = "BYTEA" if is_postgres() else "BLOB"
         with db_connection(self.dedupe_db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS article_hashes (
@@ -74,11 +75,11 @@ class Deduplicator:
                     wp_post_id INTEGER
                 )
             """)
-            conn.execute("""
+            conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS article_embeddings (
                     hash_id TEXT PRIMARY KEY,
-                    title_embedding BLOB,
-                    body_embedding BLOB,
+                    title_embedding {blob_type},
+                    body_embedding {blob_type},
                     FOREIGN KEY (hash_id) REFERENCES article_hashes(hash_id)
                 )
             """)
@@ -133,26 +134,30 @@ class Deduplicator:
         title_hash = self._sha256(norm_title)
         hash_id = self._sha256(f"{canonical_url}|{norm_title}")
 
+        p = ph()
         with db_connection(self.dedupe_db_path) as conn:
             # Check 1: exact hash
-            row = conn.execute(
-                "SELECT hash_id, wp_post_id FROM article_hashes WHERE hash_id = ?", (hash_id,)
-            ).fetchone()
+            cur = conn.execute(
+                f"SELECT hash_id, wp_post_id FROM article_hashes WHERE hash_id = {p}", (hash_id,)
+            )
+            row = cur.fetchone()
             if row:
                 return {"is_duplicate": True, "reason": "exact_hash_match", "similar_to": row[0], "wp_post_id": row[1], "similarity_score": 1.0}
 
             # Check 2: same canonical URL
-            row = conn.execute(
-                "SELECT hash_id, wp_post_id FROM article_hashes WHERE canonical_url = ?", (canonical_url,)
-            ).fetchone()
+            cur = conn.execute(
+                f"SELECT hash_id, wp_post_id FROM article_hashes WHERE canonical_url = {p}", (canonical_url,)
+            )
+            row = cur.fetchone()
             if row:
                 return {"is_duplicate": True, "reason": "same_canonical_url", "similar_to": row[0], "wp_post_id": row[1], "similarity_score": 1.0}
 
             # Check 3: similar title (semantic)
-            title_matches = conn.execute(
-                "SELECT hash_id, wp_post_id, normalized_title FROM article_hashes WHERE title_hash = ?",
+            cur = conn.execute(
+                f"SELECT hash_id, wp_post_id, normalized_title FROM article_hashes WHERE title_hash = {p}",
                 (title_hash,),
-            ).fetchall()
+            )
+            title_matches = cur.fetchall()
 
         if title_matches:
             try:
@@ -199,12 +204,26 @@ class Deduplicator:
         hash_id = self._sha256(f"{canonical_url}|{norm_title}")
         created_at = datetime.now().isoformat()
 
+        p = ph()
         with db_connection(self.dedupe_db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO article_hashes
-                (hash_id, canonical_url, normalized_title, title_hash, body_hash, created_at, wp_post_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (hash_id, canonical_url, norm_title, title_hash, body_hash, created_at, wp_post_id))
+            if is_postgres():
+                conn.execute(f"""
+                    INSERT INTO article_hashes
+                    (hash_id, canonical_url, normalized_title, title_hash, body_hash, created_at, wp_post_id)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    ON CONFLICT (hash_id) DO UPDATE SET
+                        canonical_url = EXCLUDED.canonical_url,
+                        normalized_title = EXCLUDED.normalized_title,
+                        title_hash = EXCLUDED.title_hash,
+                        body_hash = EXCLUDED.body_hash,
+                        wp_post_id = EXCLUDED.wp_post_id
+                """, (hash_id, canonical_url, norm_title, title_hash, body_hash, created_at, wp_post_id))
+            else:
+                conn.execute(f"""
+                    INSERT OR REPLACE INTO article_hashes
+                    (hash_id, canonical_url, normalized_title, title_hash, body_hash, created_at, wp_post_id)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                """, (hash_id, canonical_url, norm_title, title_hash, body_hash, created_at, wp_post_id))
 
         logger.log_info(f"Article registered: {hash_id}")
         return hash_id

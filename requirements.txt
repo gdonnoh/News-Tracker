@@ -19,6 +19,9 @@ python-dateutil>=2.8.0
 urllib3>=2.0.0
 markdown>=3.4.0
 
+# Database (PostgreSQL per Vercel, SQLite locale)
+psycopg2-binary>=2.9.0
+
 # Optional: per miglior parsing HTML
 html5lib>=1.1
 

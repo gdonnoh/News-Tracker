@@ -26,8 +26,10 @@ from src.utils import (
     get_default_dedupe_db,
     get_logs_dir,
     get_status_file,
+    is_postgres,
     is_vercel,
     normalize_date,
+    ph,
     url_to_hash,
 )
 
@@ -55,10 +57,11 @@ def _ensure_db():
     if _db_initialized:
         return
     try:
+        auto_id = "SERIAL PRIMARY KEY" if is_postgres() else "INTEGER PRIMARY KEY AUTOINCREMENT"
         with db_connection(DEDUPE_DB) as conn:
-            conn.execute("""
+            conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS deleted_articles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id {auto_id},
                     url TEXT UNIQUE NOT NULL,
                     original_data TEXT NOT NULL,
                     rewritten_data TEXT,
@@ -69,9 +72,9 @@ def _ensure_db():
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deleted_url ON deleted_articles(url)")
-            conn.execute("""
+            conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS candidates (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id {auto_id},
                     url TEXT UNIQUE NOT NULL,
                     title TEXT,
                     description TEXT,
@@ -200,10 +203,11 @@ def get_candidates():
 
         # Read candidates from DB
         with db_connection(DEDUPE_DB) as conn:
-            rows = conn.execute("""
+            cur = conn.execute("""
                 SELECT url, title, description, published_at, source
                 FROM candidates ORDER BY published_at DESC
-            """).fetchall()
+            """)
+            rows = cur.fetchall()
 
         by_source: dict = {}
         for url, title, description, published_at, source in rows:
@@ -250,13 +254,14 @@ def _refresh_candidates():
     all_candidates = fetcher.fetch_all(limit=None)
     now = datetime.now().isoformat()
 
+    p = ph()
     with db_connection(DEDUPE_DB) as conn:
         conn.execute("DELETE FROM candidates")
         for c in all_candidates:
-            conn.execute("""
-                INSERT OR REPLACE INTO candidates
+            conn.execute(f"""
+                INSERT INTO candidates
                 (url, title, description, published_at, source, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
             """, (
                 c.get("url"),
                 c.get("title", ""),
@@ -349,13 +354,14 @@ def refresh_candidates_stream():
 
             # Store candidates in DB
             now = datetime.now().isoformat()
+            p = ph()
             with db_connection(DEDUPE_DB) as conn:
                 conn.execute("DELETE FROM candidates")
                 for c in all_candidates:
-                    conn.execute("""
-                        INSERT OR REPLACE INTO candidates
+                    conn.execute(f"""
+                        INSERT INTO candidates
                         (url, title, description, published_at, source, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
                     """, (
                         c.get("url"),
                         c.get("title", ""),
@@ -527,20 +533,42 @@ def delete_article():
 
         source_name = article_data.get("source_name", "Unknown")
 
+        p = ph()
         with db_connection(DEDUPE_DB) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO deleted_articles
-                (url, original_data, rewritten_data, quality_gate_data, source_name, deleted_at, deleted_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                article_url,
-                json.dumps(article_data.get("original", article_data), ensure_ascii=False),
-                json.dumps(article_data.get("rewritten", {}), ensure_ascii=False) if article_data.get("rewritten") else None,
-                json.dumps(article_data.get("quality_gate", {}), ensure_ascii=False) if article_data.get("quality_gate") else None,
-                source_name,
-                time.strftime("%Y-%m-%dT%H:%M:%S"),
-                data.get("reason", "Deleted by user"),
-            ))
+            if is_postgres():
+                conn.execute(f"""
+                    INSERT INTO deleted_articles
+                    (url, original_data, rewritten_data, quality_gate_data, source_name, deleted_at, deleted_reason)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    ON CONFLICT (url) DO UPDATE SET
+                        original_data = EXCLUDED.original_data,
+                        rewritten_data = EXCLUDED.rewritten_data,
+                        quality_gate_data = EXCLUDED.quality_gate_data,
+                        deleted_at = EXCLUDED.deleted_at,
+                        deleted_reason = EXCLUDED.deleted_reason
+                """, (
+                    article_url,
+                    json.dumps(article_data.get("original", article_data), ensure_ascii=False),
+                    json.dumps(article_data.get("rewritten", {}), ensure_ascii=False) if article_data.get("rewritten") else None,
+                    json.dumps(article_data.get("quality_gate", {}), ensure_ascii=False) if article_data.get("quality_gate") else None,
+                    source_name,
+                    time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    data.get("reason", "Deleted by user"),
+                ))
+            else:
+                conn.execute(f"""
+                    INSERT OR REPLACE INTO deleted_articles
+                    (url, original_data, rewritten_data, quality_gate_data, source_name, deleted_at, deleted_reason)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                """, (
+                    article_url,
+                    json.dumps(article_data.get("original", article_data), ensure_ascii=False),
+                    json.dumps(article_data.get("rewritten", {}), ensure_ascii=False) if article_data.get("rewritten") else None,
+                    json.dumps(article_data.get("quality_gate", {}), ensure_ascii=False) if article_data.get("quality_gate") else None,
+                    source_name,
+                    time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    data.get("reason", "Deleted by user"),
+                ))
 
         for path in (rewritten_file, extracted_file):
             if path.exists():
@@ -558,11 +586,12 @@ def get_deleted_articles():
     try:
         _ensure_db()
         with db_connection(DEDUPE_DB) as conn:
-            rows = conn.execute("""
+            cur = conn.execute("""
                 SELECT url, original_data, rewritten_data, quality_gate_data,
                        source_name, deleted_at, deleted_reason
                 FROM deleted_articles ORDER BY deleted_at DESC LIMIT 100
-            """).fetchall()
+            """)
+            rows = cur.fetchall()
 
         deleted = []
         for url, orig_json, rew_json, qg_json, source, deleted_at, reason in rows:

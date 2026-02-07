@@ -14,7 +14,7 @@ import requests
 from dateutil import parser as date_parser
 
 from src.logger import get_logger
-from src.utils import db_connection
+from src.utils import db_connection, is_postgres, ph
 
 logger = get_logger()
 
@@ -64,14 +64,15 @@ class SourceFetcher:
     # ------------------------------------------------------------------
 
     def _init_db(self):
+        default_val = "FALSE" if is_postgres() else "0"
         with db_connection(self.dedupe_db_path) as conn:
-            conn.execute("""
+            conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS processed_urls (
                     url_hash TEXT PRIMARY KEY,
                     url TEXT UNIQUE NOT NULL,
                     first_seen_at TEXT NOT NULL,
                     last_seen_at TEXT NOT NULL,
-                    processed BOOLEAN DEFAULT 0
+                    processed BOOLEAN DEFAULT {default_val}
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_url ON processed_urls(url)")
@@ -80,10 +81,12 @@ class SourceFetcher:
         if self._processed_cache is not None:
             return
         try:
+            processed_val = "TRUE" if is_postgres() else "1"
             with db_connection(self.dedupe_db_path) as conn:
-                rows = conn.execute(
-                    "SELECT url_hash FROM processed_urls WHERE processed = 1"
-                ).fetchall()
+                cur = conn.execute(
+                    f"SELECT url_hash FROM processed_urls WHERE processed = {processed_val}"
+                )
+                rows = cur.fetchall()
                 self._processed_cache = {row[0] for row in rows}
         except Exception as e:
             logger.log_warning(f"Could not load processed URL cache: {e}")
@@ -93,23 +96,36 @@ class SourceFetcher:
         url_hash = hashlib.sha256(url.encode()).hexdigest()
         if self._processed_cache is not None and url_hash in self._processed_cache:
             return True
+        p = ph()
         with db_connection(self.dedupe_db_path) as conn:
-            result = conn.execute(
-                "SELECT processed FROM processed_urls WHERE url_hash = ?", (url_hash,)
-            ).fetchone()
-        return result is not None and result[0] == 1
+            cur = conn.execute(
+                f"SELECT processed FROM processed_urls WHERE url_hash = {p}", (url_hash,)
+            )
+            result = cur.fetchone()
+        return result is not None and result[0] in (1, True)
 
     def _mark_url_seen(self, url: str, processed: bool = False):
         url_hash = hashlib.sha256(url.encode()).hexdigest()
         now = datetime.now().isoformat()
+        p = ph()
         with db_connection(self.dedupe_db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO processed_urls
-                (url_hash, url, first_seen_at, last_seen_at, processed)
-                VALUES (?, ?,
-                    COALESCE((SELECT first_seen_at FROM processed_urls WHERE url_hash = ?), ?),
-                    ?, ?)
-            """, (url_hash, url, url_hash, now, now, 1 if processed else 0))
+            if is_postgres():
+                conn.execute(f"""
+                    INSERT INTO processed_urls
+                    (url_hash, url, first_seen_at, last_seen_at, processed)
+                    VALUES ({p}, {p}, {p}, {p}, {p})
+                    ON CONFLICT (url_hash) DO UPDATE SET
+                        last_seen_at = EXCLUDED.last_seen_at,
+                        processed = EXCLUDED.processed
+                """, (url_hash, url, now, now, processed))
+            else:
+                conn.execute(f"""
+                    INSERT OR REPLACE INTO processed_urls
+                    (url_hash, url, first_seen_at, last_seen_at, processed)
+                    VALUES ({p}, {p},
+                        COALESCE((SELECT first_seen_at FROM processed_urls WHERE url_hash = {p}), {p}),
+                        {p}, {p})
+                """, (url_hash, url, url_hash, now, now, 1 if processed else 0))
 
         if processed:
             if self._processed_cache is None:

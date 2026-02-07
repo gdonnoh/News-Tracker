@@ -160,27 +160,62 @@ def normalize_date(date_str: Optional[str]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Database helpers
+# Database helpers (dual-backend: SQLite local, PostgreSQL on Vercel)
 # ---------------------------------------------------------------------------
+
+def is_postgres() -> bool:
+    """Return True if a PostgreSQL connection string is configured."""
+    return bool(os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL"))
+
+
+def _get_pg_url() -> str:
+    """Return the PostgreSQL connection URL."""
+    url = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL") or ""
+    # Vercel Postgres uses postgres:// but psycopg2 needs postgresql://
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    return url
+
+
+def ph() -> str:
+    """Return the SQL placeholder for the current backend ('?' or '%s')."""
+    return "%s" if is_postgres() else "?"
+
 
 @contextmanager
 def db_connection(db_path: Optional[Path] = None, timeout: float = 10.0):
     """
-    Context manager for SQLite connections.
+    Context manager for database connections.
+    Uses PostgreSQL when POSTGRES_URL/DATABASE_URL is set, else SQLite.
 
     Usage:
         with db_connection() as conn:
-            conn.execute("SELECT ...")
+            conn.execute(f"SELECT * FROM t WHERE id = {ph()}", (value,))
     """
-    if db_path is None:
-        db_path = get_default_dedupe_db()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path), timeout=timeout)
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    if is_postgres():
+        import psycopg2
+        conn = psycopg2.connect(_get_pg_url(), connect_timeout=int(timeout))
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    else:
+        if db_path is None:
+            db_path = get_default_dedupe_db()
+        try:
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        conn = sqlite3.connect(str(db_path), timeout=timeout)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
