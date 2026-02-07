@@ -2118,6 +2118,12 @@
     /* ────────── Feed Refresh with Progress (SSE) ────────── */
     function refreshFeeds() {
         const btn = document.getElementById('refreshFeedBtn');
+
+        // Skip SSE on Vercel — serverless can't stream, use direct fetch
+        if (location.hostname.includes('vercel.app')) {
+            return refreshFeedsFallback(btn);
+        }
+
         const panel = document.getElementById('feedProgressPanel');
         const fill = document.getElementById('feedProgressFill');
         const pctEl = document.getElementById('feedProgressPct');

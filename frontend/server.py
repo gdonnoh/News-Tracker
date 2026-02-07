@@ -244,11 +244,16 @@ def _refresh_candidates():
     with open(config_path, "r", encoding="utf-8") as f:
         sources_config = yaml.safe_load(f) or {}
 
+    delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
+    dl_timeout = sources_config.get("timeouts", {}).get("download", 30)
+    if is_vercel():
+        delay = 0
+        dl_timeout = 3
     fetcher = SourceFetcher(
         sources_config=sources_config,
         dedupe_db_path=str(DEDUPE_DB),
-        rate_limit_delay=sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0),
-        timeout=sources_config.get("timeouts", {}).get("download", 30),
+        rate_limit_delay=delay,
+        timeout=dl_timeout,
     )
 
     all_candidates = fetcher.fetch_all(limit=None)
