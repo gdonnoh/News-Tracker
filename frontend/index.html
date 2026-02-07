@@ -407,10 +407,77 @@
         }
 
         .badge-premium {
-            background: var(--ink);
+            background: #b45309;
+            color: white;
             font-size: 0.625rem;
+            font-weight: 700;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            letter-spacing: 0.03em;
+        }
+
+        .badge-premium-likely {
+            background: transparent;
+            color: #b45309;
+            font-size: 0.625rem;
+            font-weight: 600;
             padding: 0.15rem 0.5rem;
             border-radius: 999px;
+            border: 1px solid #d97706;
+        }
+
+        .candidate-row.premium-high {
+            border-left: 3px solid #d97706;
+            background: #fffbeb;
+        }
+
+        .candidate-row.premium-high:hover {
+            border-color: #d97706;
+            border-left-color: #b45309;
+        }
+
+        .candidate-row.premium-medium {
+            border-left: 3px solid #fbbf24;
+            background: #fefce8;
+        }
+
+        .candidate-row.premium-medium:hover {
+            border-color: #fbbf24;
+            border-left-color: #d97706;
+        }
+
+        .premium-filter-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--ink-secondary);
+            cursor: pointer;
+            transition: all var(--transition);
+            margin-left: auto;
+        }
+
+        .premium-filter-btn:hover {
+            border-color: #d97706;
+            color: #b45309;
+        }
+
+        .premium-filter-btn.active {
+            background: #fffbeb;
+            border-color: #d97706;
+            color: #b45309;
+        }
+
+        .premium-filter-btn .premium-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #d97706;
         }
 
         /* ─── Article Cards Grid ─── */
@@ -1492,10 +1559,51 @@
         return (wrapper.textContent || '').replace(/\s+/g, ' ').trim();
     }
 
-    function isPremiumCandidate(text, title) {
+    let premiumFilter = 'all'; // 'all' | 'premium' | 'free'
+
+    function detectPremium(text, title) {
         const hay = `${title || ''} ${text || ''}`.toLowerCase();
-        const kw = ['contenuto per gli abbonati','contenuto riservato agli abbonati','abbonati per continuare a leggere','abbonati per leggere','abbonati per continuare','accedi per continuare','solo per abbonati','contenuto premium','articolo riservato','abbonamento necessario','iscriviti per leggere'];
-        return kw.some(k => hay.includes(k));
+        const descOnly = (text || '').toLowerCase();
+
+        // High confidence: explicit paywall keywords
+        const highKw = [
+            'contenuto per gli abbonati', 'contenuto riservato agli abbonati',
+            'abbonati per continuare a leggere', 'abbonati per leggere',
+            'abbonati per continuare', 'accedi per continuare a leggere',
+            'solo per abbonati', 'contenuto premium', 'articolo riservato',
+            'abbonamento necessario', 'iscriviti per leggere',
+            'riservato agli abbonati', 'disponibile per gli abbonati',
+            'articolo completo per gli abbonati', 'leggi l\'articolo completo',
+            'accesso riservato', 'contenuto esclusivo',
+            'per continuare a leggere', 'registrati per leggere',
+            'sottoscrivi per leggere', 'questo contenuto è riservato',
+            'richiede abbonamento', 'riservato ai sottoscrittori',
+            'premium content', 'subscribers only', 'paywall',
+            'questo articolo è riservato', 'visibile solo agli abbonati',
+            'acquista l\'abbonamento', 'attiva l\'abbonamento',
+            'sblocca l\'articolo', 'sblocca il contenuto',
+            'già abbonato? accedi', 'sei già abbonato',
+            'prosegui la lettura', 'per proseguire la lettura'
+        ];
+
+        for (const kw of highKw) {
+            if (hay.includes(kw)) return { isPremium: true, confidence: 'high', reason: kw };
+        }
+
+        // Medium confidence: very short description that looks truncated
+        const cleanDesc = descOnly.replace(/\s+/g, ' ').trim();
+        if (cleanDesc.length > 0 && cleanDesc.length < 120) {
+            // Short desc ending with truncation markers
+            if (/\.{2,}$|…$|\.\.\.$/.test(cleanDesc)) {
+                return { isPremium: true, confidence: 'medium', reason: 'Descrizione troncata (' + cleanDesc.length + ' car.)' };
+            }
+            // Very short desc with no real content (just a teaser line)
+            if (cleanDesc.length < 60 && !cleanDesc.includes('.')) {
+                return { isPremium: true, confidence: 'medium', reason: 'Descrizione molto breve (' + cleanDesc.length + ' car.)' };
+            }
+        }
+
+        return { isPremium: false, confidence: null, reason: null };
     }
 
     function getSourceColor(source) {
@@ -1586,7 +1694,28 @@
 
     function renderCandidates(items) {
         const container = document.getElementById('candidatesContent');
-        const totalPages = Math.ceil(items.length / CANDIDATES_PER_PAGE) || 1;
+
+        // Detect premium on all items first
+        const itemsWithPremium = items.map(a => {
+            const desc = cleanDescription(a.description);
+            return { ...a, _desc: desc, _premium: detectPremium(desc, a.title) };
+        });
+
+        // Count premium
+        const premiumHighCount = itemsWithPremium.filter(a => a._premium.confidence === 'high').length;
+        const premiumMediumCount = itemsWithPremium.filter(a => a._premium.confidence === 'medium').length;
+        const premiumTotal = premiumHighCount + premiumMediumCount;
+        const freeCount = items.length - premiumTotal;
+
+        // Apply premium filter
+        let filtered = itemsWithPremium;
+        if (premiumFilter === 'premium') {
+            filtered = itemsWithPremium.filter(a => a._premium.isPremium);
+        } else if (premiumFilter === 'free') {
+            filtered = itemsWithPremium.filter(a => !a._premium.isPremium);
+        }
+
+        const totalPages = Math.ceil(filtered.length / CANDIDATES_PER_PAGE) || 1;
         if (candidatePage > totalPages) candidatePage = totalPages;
         if (candidatePage < 1) candidatePage = 1;
 
@@ -1596,26 +1725,43 @@
         }
 
         const pageLabel = totalPages > 1 ? ` — Pagina ${candidatePage}/${totalPages}` : '';
-        const infoBar = `<div class="info-bar">${items.length} candidat${items.length === 1 ? 'o' : 'i'} ${currentSourceTab === 'all' ? 'totali' : 'da ' + currentSourceTab}${pageLabel}</div>`;
+        const premiumInfo = premiumTotal > 0 ? ` · <span style="color:#b45309">${premiumTotal} premium</span> (${premiumHighCount} certi, ${premiumMediumCount} probabili)` : '';
+
+        const filterBtns = premiumTotal > 0 ? `
+            <div style="display:flex;gap:0.4rem;margin-left:auto;">
+                <button class="premium-filter-btn ${premiumFilter === 'all' ? 'active' : ''}" onclick="setPremiumFilter('all')">Tutti (${items.length})</button>
+                <button class="premium-filter-btn ${premiumFilter === 'free' ? 'active' : ''}" onclick="setPremiumFilter('free')">Liberi (${freeCount})</button>
+                <button class="premium-filter-btn ${premiumFilter === 'premium' ? 'active' : ''}" onclick="setPremiumFilter('premium')"><span class="premium-dot"></span>Premium (${premiumTotal})</button>
+            </div>` : '';
+
+        const infoBar = `<div class="info-bar" style="display:flex;align-items:center;flex-wrap:wrap;gap:0.5rem;">${filtered.length} candidat${filtered.length === 1 ? 'o' : 'i'} ${currentSourceTab === 'all' ? 'totali' : 'da ' + currentSourceTab}${premiumInfo}${pageLabel}${filterBtns}</div>`;
 
         const start = (candidatePage - 1) * CANDIDATES_PER_PAGE;
-        const pageItems = items.slice(start, start + CANDIDATES_PER_PAGE);
+        const pageItems = filtered.slice(start, start + CANDIDATES_PER_PAGE);
 
         const rows = pageItems.map(article => {
-            const desc = cleanDescription(article.description);
-            const premium = isPremiumCandidate(desc, article.title);
+            const desc = article._desc;
+            const pm = article._premium;
             const date = article.published_at ? new Date(article.published_at).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
             const color = getSourceColor(article.source);
+            const rowClass = pm.confidence === 'high' ? ' premium-high' : pm.confidence === 'medium' ? ' premium-medium' : '';
+
+            let premiumBadge = '';
+            if (pm.confidence === 'high') {
+                premiumBadge = `<span class="badge-premium" title="${pm.reason}">PREMIUM</span>`;
+            } else if (pm.confidence === 'medium') {
+                premiumBadge = `<span class="badge-premium-likely" title="${pm.reason}">PREMIUM?</span>`;
+            }
 
             return `
-                <div class="candidate-row" data-search="${(article.title || '').toLowerCase()} ${(article.source || '').toLowerCase()} ${desc.toLowerCase()}">
+                <div class="candidate-row${rowClass}" data-search="${(article.title || '').toLowerCase()} ${(article.source || '').toLowerCase()} ${desc.toLowerCase()}">
                     <input type="checkbox" class="candidate-checkbox" data-url="${article.url}" data-source="${article.source}" onchange="updateSelectedCount()">
                     <div class="candidate-body">
                         <div class="candidate-title">${article.title || 'Nessun titolo'}</div>
                         ${desc ? `<div class="candidate-desc">${desc}</div>` : ''}
                         <div class="candidate-meta">
                             <span class="source-badge" style="background:${color}">${article.source}</span>
-                            ${premium ? '<span class="badge-premium">PREMIUM</span>' : ''}
+                            ${premiumBadge}
                             <span>${date}</span>
                             <a href="${article.url}" target="_blank" class="candidate-link">Apri &rarr;</a>
                         </div>
@@ -1623,7 +1769,13 @@
                 </div>`;
         }).join('');
 
-        container.innerHTML = infoBar + '<div class="candidate-list">' + rows + '</div>' + buildPaginationHTML(candidatePage, totalPages, 'goToCandidatePage', items.length);
+        container.innerHTML = infoBar + '<div class="candidate-list">' + rows + '</div>' + buildPaginationHTML(candidatePage, totalPages, 'goToCandidatePage', filtered.length);
+    }
+
+    function setPremiumFilter(mode) {
+        premiumFilter = mode;
+        candidatePage = 1;
+        renderCandidates(candidatesRendered);
     }
 
     function goToCandidatePage(page) {
