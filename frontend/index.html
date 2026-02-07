@@ -2206,10 +2206,29 @@
         btn.disabled = true;
         btn.textContent = 'Aggiornamento...';
         try {
-            await loadCandidates(true);
+            // Batch 0: clears old candidates and fetches first batch
+            const r0 = await fetch('/api/candidates?refresh=true&batch=0');
+            const d0 = await r0.json();
+            if (!d0.success) throw new Error(d0.error || 'Errore');
+
+            const totalBatches = d0.total_batches || 1;
+            btn.textContent = `Batch 1/${totalBatches}...`;
+
+            // Remaining batches
+            for (let b = 1; b < totalBatches; b++) {
+                btn.textContent = `Batch ${b + 1}/${totalBatches}...`;
+                const r = await fetch(`/api/candidates?refresh=true&batch=${b}`);
+                const d = await r.json();
+                if (!d.success) throw new Error(d.error || 'Errore batch ' + b);
+            }
+
+            // Load final combined results
+            await loadCandidates(false);
             toast('Feed aggiornati', 'success');
         } catch (e) {
-            toast('Errore aggiornamento feed', 'error');
+            // Still try to load whatever was saved
+            await loadCandidates(false).catch(() => {});
+            toast('Errore aggiornamento feed: ' + e.message, 'error');
         } finally {
             btn.disabled = false;
             btn.textContent = 'Aggiorna Feed';

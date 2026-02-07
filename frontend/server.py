@@ -201,7 +201,8 @@ def get_candidates():
         refresh = request.args.get("refresh", "false").lower() == "true"
 
         if refresh:
-            _refresh_candidates()
+            batch = int(request.args.get("batch", "0"))
+            _refresh_candidates(batch=batch)
 
         # Read candidates from DB
         with db_connection(DEDUPE_DB) as conn:
@@ -225,20 +226,37 @@ def get_candidates():
             articles.sort(key=lambda x: x.get("published_at") or "", reverse=True)
 
         total = sum(len(v) for v in by_source.values())
-        return jsonify({
+        result = {
             "success": True,
             "total": total,
             "by_source": by_source,
             "sources": list(by_source.keys()),
-        })
+        }
+        if refresh and is_vercel():
+            import yaml
+            config_path = BASE_DIR / "config" / "sources.yaml"
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            n_enabled = len([f for f in cfg.get("rss_feeds", []) if f.get("enabled", True)])
+            import math
+            result["total_batches"] = math.ceil(n_enabled / _VERCEL_BATCH_SIZE)
+        return jsonify(result)
 
     except Exception as e:
         print(f"Candidates error: {e}")
         return _error_response(f"Error fetching candidates: {e}")
 
 
-def _refresh_candidates():
-    """Fetch all RSS feeds and store candidates in the database."""
+_VERCEL_BATCH_SIZE = 4  # feeds per batch on Vercel (keeps each request under 10s)
+
+
+def _refresh_candidates(batch=0):
+    """Fetch RSS feeds and store candidates in the database.
+
+    On Vercel, feeds are fetched in batches of _VERCEL_BATCH_SIZE.
+    batch=0 clears existing candidates first; batch>0 appends.
+    Locally, all feeds are fetched in a single call (batch is ignored).
+    """
     import yaml
 
     config_path = BASE_DIR / "config" / "sources.yaml"
@@ -246,7 +264,7 @@ def _refresh_candidates():
         sources_config = yaml.safe_load(f) or {}
 
     if is_vercel():
-        all_candidates = _fetch_feeds_parallel(sources_config)
+        all_candidates = _fetch_feeds_parallel(sources_config, batch=batch)
     else:
         from src.fetch_sources import SourceFetcher
         fetcher = SourceFetcher(
@@ -261,7 +279,8 @@ def _refresh_candidates():
     p = ph()
     conflict = "ON CONFLICT (url) DO NOTHING" if is_postgres() else "OR IGNORE"
     with db_connection(DEDUPE_DB) as conn:
-        conn.execute("DELETE FROM candidates")
+        if batch == 0:
+            conn.execute("DELETE FROM candidates")
         for c in all_candidates:
             conn.execute(f"""
                 INSERT {'' if is_postgres() else conflict} INTO candidates
@@ -278,13 +297,21 @@ def _refresh_candidates():
             ))
 
 
-def _fetch_feeds_parallel(sources_config):
-    """Fetch all RSS feeds in parallel (for Vercel's 10s limit)."""
+def _fetch_feeds_parallel(sources_config, batch=0):
+    """Fetch RSS feeds in parallel (for Vercel's 10s limit).
+
+    Feeds are split into batches of _VERCEL_BATCH_SIZE. Only the
+    requested batch is fetched per invocation.
+    """
     import feedparser as fp
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     feeds = sources_config.get("rss_feeds", [])
     enabled = [f for f in feeds if f.get("enabled", True)]
+    start = batch * _VERCEL_BATCH_SIZE
+    enabled = enabled[start:start + _VERCEL_BATCH_SIZE]
+    if not enabled:
+        return []
 
     def fetch_one(feed_cfg):
         name = feed_cfg.get("name", feed_cfg["url"])
