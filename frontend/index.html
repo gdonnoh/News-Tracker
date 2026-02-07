@@ -943,6 +943,55 @@
             flex-shrink: 0;
         }
         .candidate-link:hover { text-decoration: underline; }
+
+        /* ─── Pagination ─── */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-top: 1.5rem;
+            padding: 1rem 0;
+        }
+
+        .page-btn {
+            min-width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--ink-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition);
+            font-family: inherit;
+            padding: 0 0.5rem;
+        }
+
+        .page-btn:hover { background: var(--bg-subtle); border-color: var(--accent-border); color: var(--ink); }
+        .page-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+        .page-info {
+            font-size: 0.8125rem;
+            color: var(--ink-muted);
+            margin: 0 0.5rem;
+        }
+
+        /* ─── Image Placeholder ─── */
+        .article-card-no-img {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--bg-subtle) 0%, var(--border-light) 100%);
+            color: var(--ink-muted);
+        }
+
+        .article-card-no-img svg { opacity: 0.3; }
     </style>
 </head>
 <body>
@@ -1014,7 +1063,7 @@
         <!-- Candidates Tab -->
         <div class="tab-panel active" id="panel-candidates">
             <div class="toolbar">
-                <button class="btn btn-primary btn-sm" onclick="loadCandidates(true)">Aggiorna Feed</button>
+                <button class="btn btn-primary btn-sm" onclick="refreshFeeds()" id="refreshFeedBtn">Aggiorna Feed</button>
                 <button class="btn btn-success btn-sm" onclick="extractSelectedCandidates()" id="extractSelectedBtn">
                     Estrai Selezionati (<span id="selectedCount">0</span>)
                 </button>
@@ -1022,6 +1071,19 @@
                 <button class="btn btn-ghost btn-sm" onclick="deselectAllCandidates()">Deseleziona</button>
                 <div class="toolbar-spacer"></div>
                 <input type="text" class="search-input" id="candidateSearch" placeholder="Cerca candidati..." oninput="filterCandidates()">
+            </div>
+            <div class="progress-panel" id="feedProgressPanel">
+                <div class="progress-header">
+                    <h3>Aggiornamento Feed RSS</h3>
+                    <span class="progress-pct" id="feedProgressPct">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="feedProgressFill"></div>
+                </div>
+                <div class="progress-step" id="feedProgressStep">In attesa...</div>
+                <div class="progress-log" id="feedProgressLog">
+                    <div style="color:#64748b;">In attesa di avvio...</div>
+                </div>
             </div>
             <div class="source-pills" id="sourcePills"></div>
             <div id="candidatesContent">
@@ -1039,6 +1101,7 @@
             <div class="articles-grid" id="articlesGrid">
                 <div class="empty-state"><p>Caricamento articoli...</p></div>
             </div>
+            <div id="articlesPagination"></div>
         </div>
 
         <!-- Logs Tab -->
@@ -1153,8 +1216,11 @@
 
     /* ── Articles ── */
     let allArticlesCache = [];
+    let articlePage = 1;
+    const ARTICLES_PER_PAGE = 12;
 
     async function loadArticles() {
+        articlePage = 1;
         const response = await fetch('/api/articles');
         const articles = await response.json();
         allArticlesCache = articles;
@@ -1165,6 +1231,10 @@
 
     function renderArticles(articles) {
         const grid = document.getElementById('articlesGrid');
+        const paginationDiv = document.getElementById('articlesPagination');
+        const totalPages = Math.ceil(articles.length / ARTICLES_PER_PAGE) || 1;
+        if (articlePage > totalPages) articlePage = totalPages;
+        if (articlePage < 1) articlePage = 1;
 
         if (articles.length === 0) {
             grid.innerHTML = `
@@ -1173,10 +1243,13 @@
                     <p>Nessun articolo estratto</p>
                     <p class="hint">Esegui la pipeline per vedere gli articoli qui</p>
                 </div>`;
+            if (paginationDiv) paginationDiv.innerHTML = '';
             return;
         }
 
-        grid.innerHTML = articles.map(article => {
+        const pageArticles = articles.slice((articlePage - 1) * ARTICLES_PER_PAGE, articlePage * ARTICLES_PER_PAGE);
+
+        grid.innerHTML = pageArticles.map(article => {
             const hasRewritten = article.has_rewritten || false;
             const rewritten = article.rewritten || {};
             const qg = article.quality_gate || {};
@@ -1234,7 +1307,7 @@
 
             const imgHTML = article.images && article.images.length > 0
                 ? `<img src="${article.images[0]}" alt="" class="article-card-img" onerror="this.style.display='none'">`
-                : '<div class="article-card-img"></div>';
+                : `<div class="article-card-img article-card-no-img"><svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V9a2 2 0 012-2h2a2 2 0 012 2v9a2 2 0 01-2 2h-2zM9 9h2m-2 4h6"/></svg></div>`;
 
             return `
                 <div class="article-card" data-search="${(title || '').toLowerCase()} ${(article.source_name || '').toLowerCase()}">
@@ -1252,9 +1325,24 @@
                     </div>
                 </div>`;
         }).join('');
+
+        if (paginationDiv) paginationDiv.innerHTML = buildPaginationHTML(articlePage, totalPages, 'goToArticlePage', articles.length);
+    }
+
+    function goToArticlePage(page) {
+        articlePage = page;
+        const q = document.getElementById('articleSearch').value.toLowerCase();
+        const list = q ? allArticlesCache.filter(a => {
+            const t = (a.rewritten?.headline || a.title || '').toLowerCase();
+            const s = (a.source_name || '').toLowerCase();
+            return t.includes(q) || s.includes(q);
+        }) : allArticlesCache;
+        renderArticles(list);
+        document.getElementById('panel-articles').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function filterArticles() {
+        articlePage = 1;
         const q = document.getElementById('articleSearch').value.toLowerCase();
         if (!q) { renderArticles(allArticlesCache); return; }
         const filtered = allArticlesCache.filter(a => {
@@ -1324,6 +1412,8 @@
     let allCandidatesData = null;
     let currentSourceTab = null;
     let candidatesRendered = [];
+    let candidatePage = 1;
+    const CANDIDATES_PER_PAGE = 30;
 
     function cleanDescription(raw) {
         if (!raw) return '';
@@ -1394,6 +1484,7 @@
 
     function switchSource(sourceName, clickedEl) {
         if (!allCandidatesData) return;
+        candidatePage = 1;
         currentSourceTab = sourceName;
 
         document.querySelectorAll('.source-pill').forEach(p => p.classList.remove('active'));
@@ -1426,15 +1517,22 @@
 
     function renderCandidates(items) {
         const container = document.getElementById('candidatesContent');
+        const totalPages = Math.ceil(items.length / CANDIDATES_PER_PAGE) || 1;
+        if (candidatePage > totalPages) candidatePage = totalPages;
+        if (candidatePage < 1) candidatePage = 1;
 
         if (items.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>Nessun articolo per questa fonte</p></div>';
             return;
         }
 
-        const infoBar = `<div class="info-bar">${items.length} candidat${items.length === 1 ? 'o' : 'i'} ${currentSourceTab === 'all' ? 'totali' : 'da ' + currentSourceTab}</div>`;
+        const pageLabel = totalPages > 1 ? ` — Pagina ${candidatePage}/${totalPages}` : '';
+        const infoBar = `<div class="info-bar">${items.length} candidat${items.length === 1 ? 'o' : 'i'} ${currentSourceTab === 'all' ? 'totali' : 'da ' + currentSourceTab}${pageLabel}</div>`;
 
-        const rows = items.map(article => {
+        const start = (candidatePage - 1) * CANDIDATES_PER_PAGE;
+        const pageItems = items.slice(start, start + CANDIDATES_PER_PAGE);
+
+        const rows = pageItems.map(article => {
             const desc = cleanDescription(article.description);
             const premium = isPremiumCandidate(desc, article.title);
             const date = article.published_at ? new Date(article.published_at).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
@@ -1456,10 +1554,26 @@
                 </div>`;
         }).join('');
 
-        container.innerHTML = infoBar + '<div class="candidate-list">' + rows + '</div>';
+        container.innerHTML = infoBar + '<div class="candidate-list">' + rows + '</div>' + buildPaginationHTML(candidatePage, totalPages, 'goToCandidatePage', items.length);
+    }
+
+    function goToCandidatePage(page) {
+        candidatePage = page;
+        renderCandidates(candidatesRendered.length > 0 ? (() => {
+            const q = document.getElementById('candidateSearch').value.toLowerCase();
+            if (!q) return candidatesRendered;
+            return candidatesRendered.filter(a => {
+                const t = (a.title || '').toLowerCase();
+                const s = (a.source || '').toLowerCase();
+                const d = cleanDescription(a.description).toLowerCase();
+                return t.includes(q) || s.includes(q) || d.includes(q);
+            });
+        })() : []);
+        document.getElementById('panel-candidates').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function filterCandidates() {
+        candidatePage = 1;
         const q = document.getElementById('candidateSearch').value.toLowerCase();
         if (!q) { renderCandidates(candidatesRendered); return; }
         const filtered = candidatesRendered.filter(a => {
@@ -1776,6 +1890,130 @@
                 }
             }
         });
+    }
+
+    /* ────────── Feed Refresh with Progress (SSE) ────────── */
+    function refreshFeeds() {
+        const btn = document.getElementById('refreshFeedBtn');
+        const panel = document.getElementById('feedProgressPanel');
+        const fill = document.getElementById('feedProgressFill');
+        const pctEl = document.getElementById('feedProgressPct');
+        const step = document.getElementById('feedProgressStep');
+        const log = document.getElementById('feedProgressLog');
+
+        btn.disabled = true;
+        btn.textContent = 'Aggiornamento...';
+        panel.classList.add('visible');
+        fill.style.width = '0%';
+        pctEl.textContent = '0%';
+        step.textContent = 'Connessione...';
+        log.innerHTML = '<div style="color:#64748b;">Avvio aggiornamento feed...</div>';
+
+        const messages = [];
+        let sseWorked = false;
+
+        const source = new EventSource('/api/candidates/refresh-stream');
+
+        source.onmessage = function(event) {
+            sseWorked = true;
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'progress') {
+                fill.style.width = data.pct + '%';
+                pctEl.textContent = data.pct + '%';
+                step.textContent = `Feed ${data.index + 1}/${data.total} \u2014 ${data.feed}`;
+                messages.push(`<div style="color:#93c5fd;"><span style="color:#64748b;">[${data.index + 1}/${data.total}]</span> Scaricando: ${data.feed}...</div>`);
+            } else if (data.type === 'feed_done') {
+                fill.style.width = data.pct + '%';
+                pctEl.textContent = data.pct + '%';
+                messages.push(`<div style="color:#34d399;"><span style="color:#64748b;">[${data.index + 1}/${data.total}]</span> \u2713 ${data.feed}: ${data.articles} nuovi</div>`);
+            } else if (data.type === 'feed_error') {
+                fill.style.width = data.pct + '%';
+                pctEl.textContent = data.pct + '%';
+                messages.push(`<div style="color:#fbbf24;"><span style="color:#64748b;">[${data.index + 1}/${data.total}]</span> \u26A0 ${data.feed}: ${data.error}</div>`);
+            } else if (data.type === 'complete') {
+                fill.style.width = '100%';
+                pctEl.textContent = '100%';
+                step.textContent = `Completato \u2014 ${data.total_candidates} candidati totali`;
+                messages.push(`<div style="color:#34d399;font-weight:600;">\u2713 Aggiornamento completato: ${data.total_candidates} candidati</div>`);
+                source.close();
+                btn.disabled = false;
+                btn.textContent = 'Aggiorna Feed';
+                loadCandidates(false);
+                toast(`Feed aggiornati: ${data.total_candidates} candidati`, 'success');
+                setTimeout(() => panel.classList.remove('visible'), 5000);
+            } else if (data.type === 'error') {
+                messages.push(`<div style="color:#f87171;">\u2717 Errore: ${data.message}</div>`);
+                source.close();
+                btn.disabled = false;
+                btn.textContent = 'Aggiorna Feed';
+                toast('Errore aggiornamento feed', 'error');
+                setTimeout(() => panel.classList.remove('visible'), 3000);
+            }
+
+            log.innerHTML = messages.join('');
+            log.scrollTop = log.scrollHeight;
+        };
+
+        source.onerror = function() {
+            source.close();
+            if (!sseWorked) {
+                // SSE not supported (e.g. Vercel) — fallback to simple fetch
+                panel.classList.remove('visible');
+                refreshFeedsFallback(btn);
+            } else {
+                step.textContent = 'Connessione persa';
+                messages.push('<div style="color:#f87171;">\u2717 Connessione persa. Caricamento dati salvati...</div>');
+                log.innerHTML = messages.join('');
+                btn.disabled = false;
+                btn.textContent = 'Aggiorna Feed';
+                loadCandidates(false);
+                setTimeout(() => panel.classList.remove('visible'), 3000);
+            }
+        };
+    }
+
+    async function refreshFeedsFallback(btn) {
+        btn.disabled = true;
+        btn.textContent = 'Aggiornamento...';
+        try {
+            await loadCandidates(true);
+            toast('Feed aggiornati', 'success');
+        } catch (e) {
+            toast('Errore aggiornamento feed', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Aggiorna Feed';
+        }
+    }
+
+    /* ────────── Pagination Helper ────────── */
+    function buildPaginationHTML(current, total, fnName, itemCount) {
+        if (total <= 1) return '';
+        let html = '<div class="pagination">';
+        html += `<button class="page-btn" ${current <= 1 ? 'disabled' : ''} onclick="${fnName}(${current - 1})">&larr; Prec</button>`;
+
+        const pages = [];
+        for (let i = 1; i <= total; i++) {
+            if (i === 1 || i === total || (i >= current - 1 && i <= current + 1)) {
+                pages.push(i);
+            } else if (pages.length > 0 && pages[pages.length - 1] !== '...') {
+                pages.push('...');
+            }
+        }
+
+        for (const p of pages) {
+            if (p === '...') {
+                html += '<span class="page-info">\u2026</span>';
+            } else {
+                html += `<button class="page-btn ${p === current ? 'active' : ''}" onclick="${fnName}(${p})">${p}</button>`;
+            }
+        }
+
+        html += `<button class="page-btn" ${current >= total ? 'disabled' : ''} onclick="${fnName}(${current + 1})">Succ &rarr;</button>`;
+        if (itemCount) html += `<span class="page-info">${itemCount} totali</span>`;
+        html += '</div>';
+        return html;
     }
 
     /* ────────── Init ────────── */

@@ -292,11 +292,13 @@ def refresh_candidates_stream():
             from src.fetch_sources import SourceFetcher
 
             delay = sources_config.get("rate_limit", {}).get("delay_between_requests", 6.0)
+            if is_vercel():
+                delay = min(delay, 1.5)  # Shorter delay on Vercel to fit within timeout
             fetcher = SourceFetcher(
                 sources_config=sources_config,
                 dedupe_db_path=str(DEDUPE_DB),
                 rate_limit_delay=delay,
-                timeout=sources_config.get("timeouts", {}).get("download", 30),
+                timeout=min(sources_config.get("timeouts", {}).get("download", 30), 15 if is_vercel() else 30),
             )
             fetcher._load_processed_cache()
 

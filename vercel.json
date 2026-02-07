@@ -1,13 +1,33 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api/server.py",
+      "use": "@vercel/python",
+      "config": {
+        "runtime": "python3.11",
+        "maxLambdaSize": "50mb"
+      }
+    }
+  ],
   "routes": [
+    {
+      "src": "/api/candidates/refresh-stream",
+      "dest": "/api/server",
+      "headers": {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no"
+      }
+    },
     {
       "src": "/(.*)",
       "dest": "/api/server"
     }
   ],
-  "env": {
-    "PYTHON_VERSION": "3.11",
-    "VERCEL": "1"
+  "functions": {
+    "api/server.py": {
+      "maxDuration": 60,
+      "memory": 512
+    }
   }
 }
