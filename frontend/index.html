@@ -1317,8 +1317,31 @@
 
     async function loadArticles() {
         articlePage = 1;
+
+        // On Vercel: load from localStorage instantly
+        if (location.hostname.includes('vercel.app')) {
+            try {
+                const cached = localStorage.getItem('nt_articles');
+                if (cached) {
+                    const cachedArticles = JSON.parse(cached);
+                    if (cachedArticles.length > 0) {
+                        allArticlesCache = cachedArticles;
+                        renderArticles(cachedArticles);
+                        updateStats(cachedArticles);
+                        document.getElementById('articlesBadge').textContent = cachedArticles.length;
+                    }
+                }
+            } catch(e) {}
+        }
+
         const response = await fetch('/api/articles');
         const articles = await response.json();
+
+        // Cache in localStorage for Vercel persistence
+        if (location.hostname.includes('vercel.app') && articles.length > 0) {
+            try { localStorage.setItem('nt_articles', JSON.stringify(articles)); } catch(e) {}
+        }
+
         allArticlesCache = articles;
         renderArticles(articles);
         updateStats(articles);
@@ -1620,53 +1643,64 @@
         return '#64748b';
     }
 
+    function _displayCandidates(data) {
+        allCandidatesData = data;
+        const badge = document.getElementById('candidatesBadge');
+        if (badge) badge.textContent = data.total;
+
+        if (data.total === 0) {
+            document.getElementById('candidatesContent').innerHTML = `
+                <div class="empty-state">
+                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <p>Nessun candidato trovato nei feed RSS</p>
+                </div>`;
+            document.getElementById('sourcePills').innerHTML = '';
+            return;
+        }
+
+        const pillsDiv = document.getElementById('sourcePills');
+        let pillsHTML = `<button class="source-pill active" onclick="switchSource('all', this)">Tutti (${data.total})</button>`;
+        for (const source of data.sources) {
+            const count = data.by_source[source].length;
+            pillsHTML += `<button class="source-pill" onclick="switchSource('${source.replace(/'/g, "\\'")}', this)">${source} (${count})</button>`;
+        }
+        pillsDiv.innerHTML = pillsHTML;
+        switchSource('all');
+    }
+
     async function loadCandidates(refresh = false) {
         try {
-            let data;
             if (refresh && location.hostname.includes('vercel.app')) {
-                // On Vercel, refreshFeedsFallback handles everything
                 return refreshFeedsFallback(document.getElementById('refreshFeedBtn'));
             }
 
-            // Try DB first
-            const url = refresh ? '/api/candidates?refresh=true' : '/api/candidates';
-            const response = await fetch(url);
-            data = await response.json();
-
-            // If DB is empty on Vercel, try localStorage cache
-            if (!refresh && data.success && data.total === 0 && location.hostname.includes('vercel.app')) {
+            // On Vercel: load from localStorage instantly, then update from API
+            if (!refresh && location.hostname.includes('vercel.app')) {
                 try {
                     const cached = localStorage.getItem('nt_candidates');
-                    if (cached) data = JSON.parse(cached);
+                    if (cached) {
+                        const cachedData = JSON.parse(cached);
+                        if (cachedData.success && cachedData.total > 0) {
+                            _displayCandidates(cachedData);
+                        }
+                    }
                 } catch(e) {}
-            }
-
-            if (!data.success) throw new Error(data.error || 'Errore');
-
-            allCandidatesData = data;
-            const badge = document.getElementById('candidatesBadge');
-            if (badge) badge.textContent = data.total;
-
-            if (data.total === 0) {
-                document.getElementById('candidatesContent').innerHTML = `
-                    <div class="empty-state">
-                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <p>Nessun candidato trovato nei feed RSS</p>
-                    </div>`;
-                document.getElementById('sourcePills').innerHTML = '';
+                // Update from DB in background (don't await if we already have cached data)
+                fetch('/api/candidates').then(r => r.json()).then(data => {
+                    if (data.success && data.total > 0) {
+                        try { localStorage.setItem('nt_candidates', JSON.stringify(data)); } catch(e) {}
+                        _displayCandidates(data);
+                    }
+                }).catch(() => {});
                 return;
             }
 
-            // Build source pills
-            const pillsDiv = document.getElementById('sourcePills');
-            let pillsHTML = `<button class="source-pill active" onclick="switchSource('all', this)">Tutti (${data.total})</button>`;
-            for (const source of data.sources) {
-                const count = data.by_source[source].length;
-                pillsHTML += `<button class="source-pill" onclick="switchSource('${source.replace(/'/g, "\\'")}', this)">${source} (${count})</button>`;
-            }
-            pillsDiv.innerHTML = pillsHTML;
-
-            switchSource('all');
+            // Local: direct DB fetch
+            const url = refresh ? '/api/candidates?refresh=true' : '/api/candidates';
+            const response = await fetch(url);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Errore');
+            _displayCandidates(data);
             if (refresh) toast('Feed aggiornati', 'success');
         } catch (e) {
             console.error('Errore candidati:', e);

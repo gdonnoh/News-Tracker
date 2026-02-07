@@ -88,6 +88,18 @@ def _ensure_db():
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_candidates_url ON candidates(url)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_candidates_source ON candidates(source)")
+            conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS articles (
+                    id {auto_id},
+                    url TEXT UNIQUE NOT NULL,
+                    article_data TEXT NOT NULL,
+                    has_rewritten BOOLEAN DEFAULT {'FALSE' if is_postgres() else '0'},
+                    source_name TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url)")
         _db_initialized = True
     except Exception as e:
         print(f"Warning: DB init error: {e}")
@@ -96,6 +108,56 @@ def _ensure_db():
 def _error_response(message: str, status_code: int = 500):
     """Return a JSON error without leaking tracebacks to the client."""
     return jsonify({"error": message}), status_code
+
+
+def _sync_cache_to_db():
+    """Scan cache directory and persist any articles to the database."""
+    try:
+        for json_file in glob.glob(str(CACHE_DIR / "rewritten_*.json")):
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                url = data.get("url", "")
+                if url:
+                    _save_article_to_db(url, json.dumps(data, ensure_ascii=False), True, data.get("source_name"))
+            except Exception:
+                pass
+        for json_file in glob.glob(str(CACHE_DIR / "extracted_*.json")):
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                url = data.get("url", "")
+                if url:
+                    _save_article_to_db(url, json.dumps(data, ensure_ascii=False), False, data.get("source_name"))
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Warning: cache sync to DB failed: {e}")
+
+
+def _save_article_to_db(article_url, article_json, has_rewritten, source_name):
+    """Persist an article to the database (best-effort)."""
+    try:
+        _ensure_db()
+        now = datetime.now().isoformat()
+        p = ph()
+        with db_connection(DEDUPE_DB) as conn:
+            if is_postgres():
+                conn.execute(f"""
+                    INSERT INTO articles (url, article_data, has_rewritten, source_name, created_at, updated_at)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p})
+                    ON CONFLICT (url) DO UPDATE SET
+                        article_data = EXCLUDED.article_data,
+                        has_rewritten = EXCLUDED.has_rewritten,
+                        updated_at = EXCLUDED.updated_at
+                """, (article_url, article_json, has_rewritten, source_name, now, now))
+            else:
+                conn.execute(f"""
+                    INSERT OR REPLACE INTO articles (url, article_data, has_rewritten, source_name, created_at, updated_at)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p})
+                """, (article_url, article_json, has_rewritten, source_name, now, now))
+    except Exception as e:
+        print(f"Warning: save article to DB failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +184,7 @@ def get_articles():
     articles = []
     processed_urls: set = set()
 
-    # Rewritten files first (contain both original + rewritten)
+    # Read from cache files (works locally, ephemeral on Vercel)
     for json_file in sorted(glob.glob(str(CACHE_DIR / "rewritten_*.json")), reverse=True):
         try:
             with open(json_file, "r", encoding="utf-8") as f:
@@ -139,7 +201,6 @@ def get_articles():
         except Exception as e:
             print(f"Error reading {json_file}: {e}")
 
-    # Then extracted-only (not yet rewritten)
     for json_file in sorted(glob.glob(str(CACHE_DIR / "extracted_*.json")), reverse=True):
         try:
             with open(json_file, "r", encoding="utf-8") as f:
@@ -149,6 +210,36 @@ def get_articles():
                 articles.append(article)
         except Exception as e:
             print(f"Error reading {json_file}: {e}")
+
+    # On Vercel, also load from DB (cache files are ephemeral)
+    if is_postgres() and not articles:
+        try:
+            _ensure_db()
+            with db_connection(DEDUPE_DB) as conn:
+                rows = conn.execute(
+                    "SELECT url, article_data, has_rewritten FROM articles ORDER BY updated_at DESC"
+                ).fetchall()
+            for url, article_json, has_rewritten in rows:
+                if url not in processed_urls:
+                    try:
+                        data = json.loads(article_json)
+                        if has_rewritten:
+                            article = {
+                                **data.get("original", {}),
+                                "rewritten": data.get("rewritten", {}),
+                                "has_rewritten": True,
+                                "processed_at": data.get("processed_at"),
+                                "quality_gate": data.get("quality_gate", {}),
+                            }
+                        else:
+                            article = data
+                            article["has_rewritten"] = False
+                        articles.append(article)
+                        processed_urls.add(url)
+                    except Exception as e:
+                        print(f"Error parsing article from DB: {e}")
+        except Exception as e:
+            print(f"Warning: DB article load failed: {e}")
 
     return jsonify(articles)
 
@@ -185,6 +276,20 @@ def get_article_by_url():
             "url": article.get("url"),
             "source_name": article.get("source_name"),
         })
+
+    # Fallback: check DB (Vercel cache files are ephemeral)
+    if is_postgres():
+        try:
+            _ensure_db()
+            p = ph()
+            with db_connection(DEDUPE_DB) as conn:
+                row = conn.execute(
+                    f"SELECT article_data FROM articles WHERE url = {p}", (url,)
+                ).fetchone()
+            if row:
+                return jsonify(json.loads(row[0]))
+        except Exception as e:
+            print(f"DB article lookup failed: {e}")
 
     return _error_response("Article not found", 404)
 
@@ -559,6 +664,9 @@ def extract_articles():
             pipeline.run(limit=limit)
             msg = f"Pipeline completed: up to {limit} articles processed"
 
+        # Persist newly created cache files to DB
+        _sync_cache_to_db()
+
         return jsonify({"success": True, "message": msg, "status": "completed"})
 
     except Exception as e:
@@ -644,6 +752,14 @@ def rewrite_article():
         rewritten_file = CACHE_DIR / f"rewritten_{file_hash}.json"
         with open(rewritten_file, "w", encoding="utf-8") as f:
             json.dump(combined, f, indent=2, ensure_ascii=False)
+
+        # Persist to DB for Vercel (cache files are ephemeral)
+        _save_article_to_db(
+            article_url,
+            json.dumps(combined, ensure_ascii=False),
+            has_rewritten=True,
+            source_name=extracted_data.get("source_name"),
+        )
 
         return jsonify({
             "success": True,
