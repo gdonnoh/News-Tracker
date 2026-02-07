@@ -1,15 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/server.py",
-      "use": "@vercel/python",
-      "config": {
-        "runtime": "python3.11",
-        "maxLambdaSize": "50mb"
-      }
-    }
-  ],
   "routes": [
     {
       "src": "/api/candidates/refresh-stream",
@@ -23,11 +13,5 @@
       "src": "/(.*)",
       "dest": "/api/server"
     }
-  ],
-  "functions": {
-    "api/server.py": {
-      "maxDuration": 60,
-      "memory": 512
-    }
-  }
+  ]
 }
