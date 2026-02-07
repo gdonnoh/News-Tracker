@@ -259,13 +259,15 @@ def _refresh_candidates():
 
     now = datetime.now().isoformat()
     p = ph()
+    conflict = "ON CONFLICT (url) DO NOTHING" if is_postgres() else "OR IGNORE"
     with db_connection(DEDUPE_DB) as conn:
         conn.execute("DELETE FROM candidates")
         for c in all_candidates:
             conn.execute(f"""
-                INSERT INTO candidates
+                INSERT {'' if is_postgres() else conflict} INTO candidates
                 (url, title, description, published_at, source, created_at, updated_at)
                 VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                {conflict if is_postgres() else ''}
             """, (
                 c.get("url"),
                 c.get("title", ""),
@@ -410,13 +412,15 @@ def refresh_candidates_stream():
             # Store candidates in DB
             now = datetime.now().isoformat()
             p = ph()
+            conflict = "ON CONFLICT (url) DO NOTHING" if is_postgres() else "OR IGNORE"
             with db_connection(DEDUPE_DB) as conn:
                 conn.execute("DELETE FROM candidates")
                 for c in all_candidates:
                     conn.execute(f"""
-                        INSERT INTO candidates
+                        INSERT {'' if is_postgres() else conflict} INTO candidates
                         (url, title, description, published_at, source, created_at, updated_at)
                         VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                        {conflict if is_postgres() else ''}
                     """, (
                         c.get("url"),
                         c.get("title", ""),
